@@ -90,14 +90,14 @@ export default function ProductsPage() {
         await updateProduct(editingProduct.id, {
           name: formData.name,
           price,
-          description: formData.description || undefined,
+          description: formData.description || '',
         })
       } else {
         // 新規作成
         await addProduct({
           name: formData.name,
           price,
-          description: formData.description || undefined,
+          description: formData.description || '',
         })
       }
 
