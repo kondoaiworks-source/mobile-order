@@ -1,0 +1,23 @@
+export type Product = {
+  id: string
+  name: string
+  price: number
+  description: string
+}
+
+export type OrderStatus = 'pending' | 'preparing' | 'completed'
+
+export type OrderItem = {
+  productId: string
+  quantity: number
+  price: number
+}
+
+export type Order = {
+  id: string
+  table_number: number
+  status: OrderStatus
+  items: OrderItem[]
+  total: number
+  created_at?: string
+}
