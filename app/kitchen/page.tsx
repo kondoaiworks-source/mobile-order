@@ -87,15 +87,29 @@ export default function KitchenPage() {
           setOrders((prev) => {
             let next = [...prev]
 
-            if (payload.eventType === 'INSERT' && newOrder?.status === 'pending') {
-              next = [newOrder, ...next.filter((order) => order.id !== newOrder.id)]
+            if (payload.eventType === 'INSERT' && newOrder) {
+              // 'pending' または 'preparing' の注文のみを追加
+              if (newOrder.status === 'pending' || newOrder.status === 'preparing') {
+                next = [newOrder, ...next.filter((order) => order.id !== newOrder.id)]
+              }
             }
 
             if (payload.eventType === 'UPDATE' && newOrder) {
-              next = next.filter((order) => order.id !== newOrder.id)
-              // 'pending' または 'preparing' の注文のみを表示
+              // 既存の注文を更新または削除
+              const existingIndex = next.findIndex((order) => order.id === newOrder.id)
+              
               if (newOrder.status === 'pending' || newOrder.status === 'preparing') {
-                next = [newOrder, ...next]
+                // 'pending' または 'preparing' の注文は更新または追加
+                if (existingIndex >= 0) {
+                  next[existingIndex] = newOrder
+                } else {
+                  next = [newOrder, ...next]
+                }
+              } else {
+                // 'completed' などの他のステータスは削除
+                if (existingIndex >= 0) {
+                  next.splice(existingIndex, 1)
+                }
               }
             }
 
