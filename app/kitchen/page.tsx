@@ -13,6 +13,39 @@ const timeFormatter = new Intl.DateTimeFormat('ja-JP', {
   minute: '2-digit',
 })
 
+// 経過時間を表示するコンポーネント
+function ElapsedTime({ startTime }: { startTime?: string }) {
+  const [elapsed, setElapsed] = useState<string>('00:00:00')
+
+  useEffect(() => {
+    if (!startTime) {
+      setElapsed('00:00:00')
+      return
+    }
+
+    const updateElapsed = () => {
+      const start = new Date(startTime).getTime()
+      const now = Date.now()
+      const diff = Math.floor((now - start) / 1000) // 秒
+
+      const hours = Math.floor(diff / 3600)
+      const minutes = Math.floor((diff % 3600) / 60)
+      const seconds = diff % 60
+
+      setElapsed(
+        `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+      )
+    }
+
+    updateElapsed()
+    const interval = setInterval(updateElapsed, 1000)
+
+    return () => clearInterval(interval)
+  }, [startTime])
+
+  return <span className="font-mono text-sm font-semibold text-blue-700">{elapsed}</span>
+}
+
 export default function KitchenPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
@@ -60,7 +93,8 @@ export default function KitchenPage() {
 
             if (payload.eventType === 'UPDATE' && newOrder) {
               next = next.filter((order) => order.id !== newOrder.id)
-              if (newOrder.status === 'pending') {
+              // 'pending' または 'preparing' の注文のみを表示
+              if (newOrder.status === 'pending' || newOrder.status === 'preparing') {
                 next = [newOrder, ...next]
               }
             }
@@ -85,9 +119,37 @@ export default function KitchenPage() {
     setUpdatingId(orderId)
     try {
       const client = getSupabaseBrowserClient()
+      const now = new Date().toISOString()
+      
+      // 更新データを準備
+      let updateData: {
+        status: 'pending' | 'preparing' | 'completed'
+        start_time?: string
+        end_time?: string
+        duration_seconds?: number
+      } = { status: newStatus }
+
+      if (newStatus === 'preparing') {
+        // 調理開始: start_time を設定
+        updateData.start_time = now
+      } else if (newStatus === 'completed') {
+        // 完了: end_time を設定し、duration_seconds を計算
+        const order = orders.find((o) => o.id === orderId)
+        if (order?.start_time) {
+          const startTime = new Date(order.start_time).getTime()
+          const endTime = new Date(now).getTime()
+          const durationSeconds = Math.floor((endTime - startTime) / 1000)
+          updateData.end_time = now
+          updateData.duration_seconds = durationSeconds
+        } else {
+          // start_time がない場合でも end_time は設定
+          updateData.end_time = now
+        }
+      }
+
       const { data, error } = await client
         .from('orders')
-        .update({ status: newStatus })
+        .update(updateData)
         .eq('id', orderId)
         .select()
         .single()
@@ -99,7 +161,7 @@ export default function KitchenPage() {
 
       // ローカル状態を更新（リアルタイム更新で自動的に反映されるが、念のため）
       setOrders((prev) =>
-        prev.map((order) => (order.id === orderId ? { ...order, status: newStatus } : order))
+        prev.map((order) => (order.id === orderId ? { ...order, ...updateData } : order))
       )
     } catch (err) {
       console.error('ステータス更新エラー:', err)
@@ -166,24 +228,26 @@ export default function KitchenPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
-              {orders.map((order) => {
-                const isPending = order.status === 'pending'
-                const isPreparing = order.status === 'preparing'
-                const isUpdating = updatingId === order.id
-                
-                // ステータスに応じた背景色
-                let bgColor = 'bg-white'
-                if (isPending) {
-                  bgColor = 'bg-red-50'
-                } else if (isPreparing) {
-                  bgColor = 'bg-yellow-50'
-                }
-                
-                return (
-                  <tr
-                    key={order.id}
-                    className={bgColor}
-                  >
+              {orders
+                .filter((order) => order.status === 'pending' || order.status === 'preparing')
+                .map((order) => {
+                  const isPending = order.status === 'pending'
+                  const isPreparing = order.status === 'preparing'
+                  const isUpdating = updatingId === order.id
+                  
+                  // ステータスに応じた背景色
+                  let bgColor = 'bg-white'
+                  if (isPending) {
+                    bgColor = 'bg-red-50'
+                  } else if (isPreparing) {
+                    bgColor = 'bg-blue-100'
+                  }
+                  
+                  return (
+                    <tr
+                      key={order.id}
+                      className={bgColor}
+                    >
                     <td className="px-4 py-4">
                       <span className="text-xl font-bold text-gray-900">
                         {order.table_number || '未設定'}
@@ -195,6 +259,12 @@ export default function KitchenPage() {
                         <span className="mt-1 text-lg font-medium text-gray-700">
                           受付 {formatCreatedAt(order.created_at)}
                         </span>
+                        {isPreparing && order.start_time && (
+                          <div className="mt-2">
+                            <span className="text-xs text-gray-500">経過時間: </span>
+                            <ElapsedTime startTime={order.start_time} />
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-4 text-sm text-gray-700">

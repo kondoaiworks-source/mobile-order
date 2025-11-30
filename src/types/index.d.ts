@@ -20,4 +20,7 @@ export type Order = {
   items: OrderItem[]
   total: number
   created_at?: string
+  start_time?: string
+  end_time?: string
+  duration_seconds?: number
 }

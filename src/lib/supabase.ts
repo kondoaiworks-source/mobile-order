@@ -32,8 +32,8 @@ export async function fetchPendingOrders(): Promise<Order[]> {
 
   const { data, error } = await client
     .from('orders')
-    .select('id, table_number, status, items, total, created_at')
-    .eq('status', 'pending')
+    .select('id, table_number, status, items, total, created_at, start_time, end_time, duration_seconds')
+    .in('status', ['pending', 'preparing'])
     .order('created_at', { ascending: true })
 
   if (error) {
