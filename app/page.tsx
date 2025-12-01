@@ -29,7 +29,7 @@ function CartSummary({ items, total, onPlaceOrder, disabled, isPlacing, message,
   const itemCount = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items])
 
   return (
-    <aside className="fixed bottom-4 right-4 w-[calc(100%-2rem)] max-w-xs rounded-xl border border-gray-200 bg-white p-4 shadow-lg sm:w-80">
+    <aside className="fixed bottom-0 left-0 right-0 z-50 w-full rounded-t-xl border-t border-gray-200 bg-white p-4 shadow-lg sm:bottom-4 sm:left-auto sm:right-4 sm:w-80 sm:rounded-xl sm:border sm:border-t">
       <h2 className="text-lg font-semibold">カート</h2>
       <div className="mt-2">
         <label className="text-xs font-medium text-gray-700" htmlFor="cart-table-number">
@@ -181,10 +181,10 @@ export default function HomePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-10 px-6 py-12">
+    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-6 pb-40 sm:gap-10 sm:px-6 sm:py-12 sm:pb-12">
       <header className="text-center">
-        <h1 className="text-4xl font-bold">メニュー一覧</h1>
-        <p className="mt-2 text-gray-600">お好きな商品をカートに追加してください。</p>
+        <h1 className="text-3xl font-bold sm:text-4xl">メニュー一覧</h1>
+        <p className="mt-2 text-sm text-gray-600 sm:text-base">お好きな商品をカートに追加してください。</p>
         <div className="mt-4 flex items-center justify-center gap-3">
           <label className="text-sm font-medium text-gray-700" htmlFor="table-number">
             テーブル番号
@@ -207,23 +207,23 @@ export default function HomePage() {
       ) : products.length === 0 ? (
         <p className="text-center text-gray-500">商品が存在しません。</p>
       ) : (
-        <ul className="grid gap-6 sm:grid-cols-2">
+        <ul className="grid gap-4 sm:grid-cols-2 sm:gap-6">
           {products.map((product) => (
             <li
               key={product.id}
-              className="flex flex-col justify-between rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
+              className="flex flex-col justify-between rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6"
             >
               <div>
-                <h2 className="text-2xl font-semibold text-gray-900">{product.name}</h2>
+                <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">{product.name}</h2>
                 <p className="mt-2 text-sm text-gray-600">{product.description}</p>
-                <p className="mt-4 text-xl font-bold text-gray-900">
+                <p className="mt-4 text-lg font-bold text-gray-900 sm:text-xl">
                   {currencyFormatter.format(product.price)}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => handleAddToCart(product)}
-                className="mt-6 rounded-md bg-emerald-600 px-4 py-2 text-white transition hover:bg-emerald-500"
+                className="mt-4 w-full rounded-md bg-emerald-600 px-4 py-2 text-sm text-white transition hover:bg-emerald-500 sm:mt-6"
               >
                 カートに追加
               </button>
