@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Product } from '@/src/types'
 import { fetchProducts, placeOrder } from '@/src/lib/supabase'
+import { useCart } from '@/src/contexts/CartContext'
 
 type CartItem = {
   product: Product
@@ -195,7 +196,7 @@ function CategoryList({ products, onCategoryClick }: { products: Product[], onCa
         onTouchMove={handleTouchMove}
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
-        {categories.map((category) => {
+        {categories.map((category: string) => {
           const categoryImage = getCategoryImage(category)
           return (
             <button
@@ -280,7 +281,7 @@ interface CartSummaryProps {
 }
 
 function CartSummary({ items, total, onPlaceOrder, disabled, isPlacing, message, tableNumber, onTableNumberChange, onUpdateQuantity, onRemoveItem }: CartSummaryProps) {
-  const itemCount = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items])
+  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
   const [isExpanded, setIsExpanded] = useState(true)
 
   return (
@@ -434,10 +435,10 @@ function CartSummary({ items, total, onPlaceOrder, disabled, isPlacing, message,
 
 export default function HomePage() {
   const router = useRouter()
+  const { items: cartItems, updateQuantity, removeFromCart, clearCart, getTotal, getItemCount } = useCart()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [tableNumber, setTableNumber] = useState(1)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [orderMessage, setOrderMessage] = useState<string | null>(null)
@@ -471,46 +472,15 @@ export default function HomePage() {
     }
   }, [])
 
-  const handleAddToCart = (product: Product) => {
-    setCartItems((prev) => {
-      const existingIndex = prev.findIndex((item) => item.product.id === product.id)
-
-      if (existingIndex !== -1) {
-        const next = [...prev]
-        next[existingIndex] = {
-          ...next[existingIndex],
-          quantity: next[existingIndex].quantity + 1,
-        }
-        return next
-      }
-
-      return [...prev, { product, quantity: 1 }]
-    })
-    setOrderMessage('カートに追加しました')
-    setTimeout(() => setOrderMessage(null), 2000)
-  }
-
   const handleUpdateQuantity = (productId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      handleRemoveItem(productId)
-      return
-    }
-
-    setCartItems((prev) =>
-      prev.map((item) =>
-        item.product.id === productId ? { ...item, quantity: newQuantity } : item
-      )
-    )
+    updateQuantity(productId, newQuantity)
   }
 
   const handleRemoveItem = (productId: string) => {
-    setCartItems((prev) => prev.filter((item) => item.product.id !== productId))
+    removeFromCart(productId)
   }
 
-  const cartTotal = useMemo(
-    () => cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
-    [cartItems]
-  )
+  const cartTotal = getTotal()
 
   const handlePlaceOrder = async () => {
     if (cartItems.length === 0) {
@@ -538,7 +508,7 @@ export default function HomePage() {
         total: cartTotal,
       })
 
-      setCartItems([])
+      clearCart()
       setOrderMessage('注文が完了しました')
       setTimeout(() => setOrderMessage(null), 3000)
     } catch (err) {

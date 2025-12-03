@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import type { Product } from '@/src/types'
 import { fetchProducts } from '@/src/lib/supabase'
+import { useCart } from '@/src/contexts/CartContext'
 
 const currencyFormatter = new Intl.NumberFormat('ja-JP', {
   style: 'currency',
@@ -14,6 +15,7 @@ export default function CategoryPage() {
   const params = useParams()
   const router = useRouter()
   const category = decodeURIComponent(params.category as string)
+  const { addToCart } = useCart()
   
   const [products, setProducts] = useState<Product[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -22,6 +24,8 @@ export default function CategoryPage() {
   const [touchStart, setTouchStart] = useState(0)
   const [touchEnd, setTouchEnd] = useState(0)
   const [isImageModalOpen, setIsImageModalOpen] = useState(false)
+  const [quantity, setQuantity] = useState(1)
+  const [showAddToCartSuccess, setShowAddToCartSuccess] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -86,10 +90,26 @@ export default function CategoryPage() {
   const goToPrevious = () => {
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1)
+      setQuantity(1) // 商品が変わったら数量をリセット
+    }
+  }
+
+  const handleAddToCart = () => {
+    if (currentProduct) {
+      addToCart(currentProduct, quantity)
+      setShowAddToCartSuccess(true)
+      setTimeout(() => {
+        setShowAddToCartSuccess(false)
+      }, 2000)
     }
   }
 
   const currentProduct = products[currentIndex]
+
+  // 商品が変わったら数量をリセット
+  useEffect(() => {
+    setQuantity(1)
+  }, [currentIndex])
 
   if (loading) {
     return (
@@ -180,6 +200,56 @@ export default function CategoryPage() {
                 <span className="text-3xl font-bold text-emerald-600">
                   {currencyFormatter.format(currentProduct.price)}
                 </span>
+              </div>
+
+              {/* 数量選択とカート追加 */}
+              <div className="mt-6 space-y-4">
+                {/* 数量選択 */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">数量</span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={quantity <= 1}
+                      aria-label="数量を減らす"
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                      </svg>
+                    </button>
+                    <span className="min-w-[3rem] text-center text-lg font-semibold text-gray-900">
+                      {quantity}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(quantity + 1)}
+                      className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                      aria-label="数量を増やす"
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* カート追加ボタン */}
+                <button
+                  type="button"
+                  onClick={handleAddToCart}
+                  className="w-full rounded-lg bg-emerald-600 px-6 py-4 text-lg font-semibold text-white transition hover:bg-emerald-500 active:scale-95"
+                >
+                  カートに追加
+                </button>
+
+                {/* 成功メッセージ */}
+                {showAddToCartSuccess && (
+                  <div className="rounded-lg bg-emerald-50 p-3 text-center text-sm font-medium text-emerald-700">
+                    ✓ カートに追加しました
+                  </div>
+                )}
               </div>
             </div>
           </div>
