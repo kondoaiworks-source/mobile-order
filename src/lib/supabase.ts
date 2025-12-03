@@ -50,7 +50,7 @@ export async function fetchProducts(): Promise<Product[]> {
 
     const { data, error } = await client
       .from('products')
-      .select('id, name, price, description')
+      .select('id, name, price, description, image_url, category, is_featured')
       .order('name', { ascending: true })
 
     if (error) {

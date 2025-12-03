@@ -1,243 +1,205 @@
-# デプロイ手順ガイド
-
-このドキュメントでは、Next.js/Supabase プロジェクトを GitHub にプッシュし、Vercel にデプロイする手順を説明します。
+# 本番環境へのデプロイ手順
 
 ## 前提条件
 
-- GitHub アカウント
-- Vercel アカウント（GitHub アカウントでサインアップ可能）
-- Supabase プロジェクトが作成済み
+- Supabaseプロジェクトが作成済み
+- GitHubアカウント
+- Vercelアカウント（推奨）またはその他のホスティングサービス
 
----
+## 1. データベースの準備
 
-## 1. GitHub へのプッシュ
+### 1.1 必要なカラムの追加
 
-### 1.1 Git リポジトリの初期化（まだの場合）
-
-```bash
-# プロジェクトルートで実行
-git init
-```
-
-### 1.2 .gitignore の確認
-
-`.gitignore` ファイルに以下が含まれていることを確認してください（既に含まれています）：
-
-```
-.env*.local
-.env
-```
-
-これにより、環境変数ファイルが GitHub にプッシュされることを防ぎます。
-
-### 1.3 ファイルをステージング
-
-```bash
-# すべてのファイルを追加
-git add .
-
-# または、特定のファイルのみ追加する場合
-git add app/ lib/ src/ package.json tsconfig.json tailwind.config.js postcss.config.js next.config.js
-```
-
-### 1.4 初回コミット
-
-```bash
-git commit -m "Initial commit: Next.js Supabase app"
-```
-
-### 1.5 GitHub リポジトリの作成
-
-1. GitHub にログイン
-2. 右上の「+」→「New repository」をクリック
-3. リポジトリ名を入力（例: `nextjs-supabase-app`）
-4. 「Public」または「Private」を選択
-5. 「Initialize this repository with a README」は**チェックしない**
-6. 「Create repository」をクリック
-
-### 1.6 リモートリポジトリの追加とプッシュ
-
-```bash
-# リモートリポジトリを追加（YOUR_USERNAME と YOUR_REPO_NAME を置き換え）
-git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
-
-# メインブランチをプッシュ
-git branch -M main
-git push -u origin main
-```
-
----
-
-## 2. Vercel へのデプロイ
-
-### 2.1 Vercel プロジェクトの作成
-
-1. [Vercel](https://vercel.com) にアクセス
-2. 「Sign Up」または「Log In」をクリック
-3. 「Continue with GitHub」を選択して GitHub アカウントでログイン
-
-### 2.2 プロジェクトのインポート
-
-1. Vercel ダッシュボードで「Add New...」→「Project」をクリック
-2. GitHub リポジトリを選択
-3. 「Import」をクリック
-
-### 2.3 プロジェクト設定
-
-- **Framework Preset**: Next.js（自動検出されるはず）
-- **Root Directory**: `./`（デフォルト）
-- **Build Command**: `npm run build`（デフォルト）
-- **Output Directory**: `.next`（デフォルト）
-- **Install Command**: `npm install`（デフォルト）
-
-### 2.4 環境変数の設定
-
-**重要**: 以下の環境変数を Vercel に設定する必要があります。
-
-#### 環境変数の追加手順
-
-1. プロジェクト設定画面で「Environment Variables」セクションを開く
-2. 以下の環境変数を追加：
-
-| 変数名 | 値 | 説明 |
-|--------|-----|------|
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://xxxxx.supabase.co` | Supabase プロジェクトの URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `eyJhbGci...` | Supabase の anon public キー（`eyJ` で始まる） |
-| `SUPABASE_URL` | `https://xxxxx.supabase.co` | サーバー側用（ミドルウェアで使用） |
-| `SUPABASE_ANON_KEY` | `eyJhbGci...` | サーバー側用（ミドルウェアで使用） |
-
-**注意**: 
-- `NEXT_PUBLIC_*` はブラウザ側で使用されるため、公開されます
-- `sb_secret_` で始まるシークレットキーは**使用しないでください**（ブラウザで使用できません）
-
-#### 環境変数の取得方法
-
-1. [Supabase Dashboard](https://supabase.com/dashboard) にログイン
-2. プロジェクトを選択
-3. 「Settings」→「API」を開く
-4. 「Project URL」と「anon public」キーをコピー
-
-#### 環境ごとの設定
-
-Vercel では、環境ごとに異なる環境変数を設定できます：
-
-- **Production**: 本番環境
-- **Preview**: プルリクエストやブランチ用
-- **Development**: 開発環境（通常は使用しない）
-
-すべての環境に同じ値を設定することを推奨します。
-
-### 2.5 デプロイの実行
-
-1. 「Deploy」ボタンをクリック
-2. ビルドが完了するまで待機（通常 1-3 分）
-3. デプロイが完了すると、URL が表示されます（例: `https://your-app.vercel.app`）
-
----
-
-## 3. デプロイ後の確認
-
-### 3.1 動作確認
-
-1. デプロイされた URL にアクセス
-2. 以下を確認：
-   - 商品一覧が表示されるか
-   - 注文機能が動作するか
-   - 管理画面（`/admin/products`）が動作するか
-
-### 3.2 エラーの確認
-
-- Vercel ダッシュボードの「Functions」タブでログを確認
-- ブラウザのコンソール（F12）でエラーを確認
-
-### 3.3 Supabase RLS ポリシーの確認
-
-本番環境でも動作するように、Supabase の RLS ポリシーが正しく設定されているか確認してください：
+SupabaseのSQL Editorで以下のSQLスクリプトを実行してください：
 
 ```sql
--- products テーブル
-CREATE POLICY "Allow anonymous read access to products"
-  ON public.products FOR SELECT USING (true);
-
-CREATE POLICY "Allow anonymous insert access to products"
-  ON public.products FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Allow anonymous update access to products"
-  ON public.products FOR UPDATE USING (true);
-
-CREATE POLICY "Allow anonymous delete access to products"
-  ON public.products FOR DELETE USING (true);
-
--- orders テーブル
-CREATE POLICY "Allow anonymous read access to orders"
-  ON public.orders FOR SELECT USING (true);
-
-CREATE POLICY "Allow anonymous insert access to orders"
-  ON public.orders FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Allow anonymous update access to orders"
-  ON public.orders FOR UPDATE USING (true);
+-- add-product-fields.sql の内容を実行
 ```
 
----
+または、SupabaseダッシュボードのSQL Editorで `add-product-fields.sql` の内容をコピー＆ペーストして実行してください。
 
-## 4. 今後の更新手順
+### 1.2 商品データの設定
 
-### 4.1 コードの変更を GitHub にプッシュ
+管理画面（`/admin/products`）から、各商品に以下を設定してください：
+
+- **image_url**: 商品画像のURL（例：`https://example.com/images/product1.jpg`）
+- **category**: カテゴリ名（例：「メイン」「サイド」「ドリンク」「デザート」など）
+- **is_featured**: オススメ表示する場合は `true` に設定
+
+## 2. 環境変数の設定
+
+### 2.1 ローカル環境（開発用）
+
+`.env.local` ファイルに以下を設定：
+
+```env
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+**重要**: `NEXT_PUBLIC_SUPABASE_ANON_KEY` には **anon public** キー（`eyJ` で始まる）を使用してください。シークレットキー（`sb_secret_` で始まる）は使用しないでください。
+
+### 2.2 本番環境（Vercel）
+
+1. Vercelダッシュボードにログイン
+2. プロジェクトを選択
+3. **Settings** → **Environment Variables** に移動
+4. 以下の環境変数を追加：
+
+```
+SUPABASE_URL = your_supabase_project_url
+SUPABASE_ANON_KEY = your_supabase_anon_key
+NEXT_PUBLIC_SUPABASE_URL = your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY = your_supabase_anon_key
+```
+
+**注意**: 
+- 本番環境（Production）、プレビュー環境（Preview）、開発環境（Development）すべてに設定することを推奨
+- または、Productionのみに設定することも可能
+
+## 3. GitHubへのプッシュ
 
 ```bash
+# 変更をコミット
 git add .
-git commit -m "変更内容の説明"
+git commit -m "本番環境対応: UI改善とカテゴリ機能追加"
+
+# GitHubにプッシュ
 git push origin main
 ```
 
-### 4.2 Vercel での自動デプロイ
+## 4. Vercelへのデプロイ
 
-- Vercel は GitHub リポジトリと連携しているため、`main` ブランチにプッシュすると自動的にデプロイされます
-- プルリクエストを作成すると、プレビュー環境が自動的に作成されます
+### 4.1 初回デプロイ
 
----
+1. [Vercel](https://vercel.com) にログイン
+2. **Add New Project** をクリック
+3. GitHubリポジトリを選択
+4. プロジェクト設定：
+   - **Framework Preset**: Next.js
+   - **Root Directory**: `./` (デフォルト)
+   - **Build Command**: `npm run build` (自動検出)
+   - **Output Directory**: `.next` (自動検出)
+5. **Environment Variables** を設定（上記2.2を参照）
+6. **Deploy** をクリック
 
-## 5. トラブルシューティング
+### 4.2 自動デプロイの設定
 
-### 5.1 ビルドエラー
+GitHubにプッシュすると自動的にデプロイされます：
 
-- Vercel ダッシュボードの「Deployments」タブでエラーログを確認
-- ローカルで `npm run build` を実行してエラーを確認
+- `main` ブランチへのプッシュ → 本番環境にデプロイ
+- その他のブランチへのプッシュ → プレビュー環境にデプロイ
 
-### 5.2 環境変数のエラー
+## 5. デプロイ後の確認
 
-- 環境変数が正しく設定されているか確認
-- `NEXT_PUBLIC_*` プレフィックスが正しく付いているか確認
-- シークレットキーではなく、anon キーを使用しているか確認
+### 5.1 動作確認チェックリスト
 
-### 5.3 Supabase 接続エラー
+- [ ] メインページが表示される
+- [ ] オススメスライドショーが動作する（商品に `is_featured: true` が設定されている場合）
+- [ ] カテゴリ一覧が表示される（商品に `category` が設定されている場合）
+- [ ] カテゴリをクリックして詳細ページに遷移できる
+- [ ] 上下スワイプでメニューを切り替えられる
+- [ ] 画像をクリックして拡大表示できる
+- [ ] カート機能が動作する
+- [ ] 注文が正常に送信される
+- [ ] キッチン画面（`/kitchen`）で注文が表示される
 
-- Supabase ダッシュボードでプロジェクトがアクティブか確認
-- RLS ポリシーが正しく設定されているか確認
-- 環境変数の値が正しいか確認
+### 5.2 よくある問題と対処法
 
----
+#### 問題: 環境変数エラー
 
-## 6. セキュリティに関する注意事項
+**症状**: `Supabaseの環境変数が設定されていません` というエラー
 
-1. **環境変数の管理**
-   - `.env.local` ファイルは GitHub にプッシュしない（`.gitignore` に含まれています）
-   - 本番環境の環境変数は Vercel で管理
+**対処法**:
+1. Vercelの環境変数設定を確認
+2. 変数名が正しいか確認（`NEXT_PUBLIC_` プレフィックスが必要）
+3. 値が正しく設定されているか確認
+4. デプロイを再実行
 
-2. **Supabase キーの管理**
-   - `anon` キーは公開されても問題ありません（RLS で保護）
-   - `service_role` キーや `sb_secret_` キーは**絶対に**ブラウザ側で使用しないでください
+#### 問題: 画像が表示されない
 
-3. **RLS ポリシー**
-   - 本番環境では、必要最小限の権限のみを許可する RLS ポリシーを設定してください
+**症状**: 商品画像が表示されない
 
----
+**対処法**:
+1. `image_url` が正しく設定されているか確認
+2. 画像URLが公開アクセス可能か確認
+3. CORS設定を確認（外部画像を使用する場合）
 
-## 7. 参考リンク
+#### 問題: カテゴリが表示されない
 
-- [Vercel ドキュメント](https://vercel.com/docs)
-- [Next.js デプロイメントガイド](https://nextjs.org/docs/deployment)
-- [Supabase ドキュメント](https://supabase.com/docs)
-- [Supabase RLS ガイド](https://supabase.com/docs/guides/auth/row-level-security)
+**症状**: カテゴリ一覧が空
 
+**対処法**:
+1. 商品に `category` が設定されているか確認
+2. ブラウザのコンソールでエラーを確認
+3. データベースのデータを確認
+
+## 6. パフォーマンス最適化（オプション）
+
+### 6.1 画像の最適化
+
+- Next.jsの `next/image` コンポーネントを使用（将来的な改善）
+- CDNを使用して画像を配信
+- 画像のサイズを最適化
+
+### 6.2 データベースの最適化
+
+- インデックスが正しく作成されているか確認
+- 不要なデータを削除
+- クエリのパフォーマンスを監視
+
+## 7. セキュリティチェック
+
+- [ ] 環境変数がGitHubにコミットされていない（`.gitignore` で除外されている）
+- [ ] SupabaseのRLS（Row Level Security）が有効
+- [ ] 匿名ユーザーが適切な権限のみを持っている
+- [ ] シークレットキーがブラウザに露出していない
+
+## 8. モニタリング
+
+### 8.1 Vercel Analytics
+
+Vercelダッシュボードで以下を監視：
+- デプロイの状態
+- エラーログ
+- パフォーマンスメトリクス
+
+### 8.2 Supabase Monitoring
+
+Supabaseダッシュボードで以下を監視：
+- データベースの使用状況
+- APIリクエスト数
+- エラーログ
+
+## 9. バックアップ
+
+定期的に以下をバックアップ：
+- データベースのデータ（Supabaseダッシュボードからエクスポート可能）
+- 環境変数の設定（安全な場所に記録）
+
+## 10. トラブルシューティング
+
+問題が発生した場合：
+
+1. **ログの確認**
+   - Vercelのログを確認
+   - ブラウザのコンソールを確認
+   - Supabaseのログを確認
+
+2. **ローカルでの再現**
+   - ローカル環境で同じ問題が発生するか確認
+   - `.env.local` の設定を確認
+
+3. **コミュニティへの質問**
+   - [Vercel Community](https://github.com/vercel/next.js/discussions)
+   - [Supabase Discord](https://discord.supabase.com)
+
+## サポート
+
+問題が解決しない場合は、以下を確認してください：
+- エラーメッセージの全文
+- ブラウザのコンソールログ
+- Vercelのデプロイログ
+- Supabaseのログ

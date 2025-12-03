@@ -26,3 +26,13 @@ body {
     rgb(var(--background-start-rgb));
 }
 
+/* スクロールバーを非表示にするユーティリティクラス */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+

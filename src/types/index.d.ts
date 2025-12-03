@@ -3,6 +3,9 @@ export type Product = {
   name: string
   price: number
   description: string
+  image_url?: string | null
+  category?: string | null
+  is_featured?: boolean
 }
 
 export type OrderStatus = 'pending' | 'preparing' | 'completed'
