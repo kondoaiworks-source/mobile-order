@@ -26,6 +26,7 @@ export default function CategoryPage() {
   const [isImageModalOpen, setIsImageModalOpen] = useState(false)
   const [quantity, setQuantity] = useState(1)
   const [showAddToCartSuccess, setShowAddToCartSuccess] = useState(false)
+  const [showSuccessOverlay, setShowSuccessOverlay] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -97,10 +98,10 @@ export default function CategoryPage() {
   const handleAddToCart = () => {
     if (currentProduct) {
       addToCart(currentProduct, quantity)
-      setShowAddToCartSuccess(true)
+      setShowSuccessOverlay(true)
       setTimeout(() => {
-        setShowAddToCartSuccess(false)
-      }, 2000)
+        setShowSuccessOverlay(false)
+      }, 1000)
     }
   }
 
@@ -243,13 +244,6 @@ export default function CategoryPage() {
                 >
                   カートに追加
                 </button>
-
-                {/* 成功メッセージ */}
-                {showAddToCartSuccess && (
-                  <div className="rounded-lg bg-emerald-50 p-3 text-center text-sm font-medium text-emerald-700">
-                    ✓ カートに追加しました
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -299,6 +293,15 @@ export default function CategoryPage() {
           </div>
         </div>
       </div>
+
+      {/* カート追加成功オーバーレイ */}
+      {showSuccessOverlay && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50">
+          <div className="rounded-lg bg-white px-8 py-6 shadow-lg">
+            <p className="text-xl font-semibold text-gray-900">追加しました</p>
+          </div>
+        </div>
+      )}
 
       {/* 画像拡大モーダル */}
       {isImageModalOpen && currentProduct && (

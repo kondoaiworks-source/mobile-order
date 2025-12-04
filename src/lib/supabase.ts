@@ -11,6 +11,31 @@ export function getSupabaseBrowserClient() {
     throw new Error('Supabaseの環境変数が設定されていません。.env.local に NEXT_PUBLIC_SUPABASE_URL と NEXT_PUBLIC_SUPABASE_ANON_KEY を設定してください。')
   }
 
+  // プレースホルダーが残っていないかチェック
+  if (supabaseUrl.includes('your_supabase') || supabaseAnonKey.includes('your_supabase')) {
+    throw new Error(
+      '環境変数にプレースホルダーが残っています。\n' +
+      '.env.local ファイルを開いて、以下の値を実際のSupabaseの値に置き換えてください：\n' +
+      '1. NEXT_PUBLIC_SUPABASE_URL を Supabase ダッシュボードの「Settings」→「API」→「Project URL」の値に設定\n' +
+      '2. NEXT_PUBLIC_SUPABASE_ANON_KEY を「anon public」キー（eyJ で始まる）に設定\n' +
+      '設定後、開発サーバーを再起動してください。'
+    )
+  }
+
+  // URL形式のチェック
+  try {
+    const url = new URL(supabaseUrl)
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      throw new Error('URL must use http or https protocol')
+    }
+  } catch (error) {
+    throw new Error(
+      `NEXT_PUBLIC_SUPABASE_URL が正しいURL形式ではありません: "${supabaseUrl}"\n` +
+      '正しい形式: https://your-project-id.supabase.co\n' +
+      'Supabase ダッシュボードの「Settings」→「API」→「Project URL」から値をコピーしてください。'
+    )
+  }
+
   // シークレットキーが使われていないかチェック
   if (supabaseAnonKey.startsWith('sb_secret_')) {
     throw new Error(
