@@ -79,11 +79,10 @@ export default function CartPage() {
       clearCart()
       setShowSuccessMessage(true)
       
-      // 2秒後にメインページへ遷移
+      // 3秒後にメッセージを消す
       setTimeout(() => {
         setShowSuccessMessage(false)
-        router.push('/')
-      }, 2000)
+      }, 3000)
     } catch (err) {
       console.error('注文送信エラー:', err)
       const errorMessage = err instanceof Error ? err.message : '注文の送信に失敗しました。時間をおいて再度お試しください。'
@@ -95,23 +94,11 @@ export default function CartPage() {
   // 注文完了メッセージ表示中
   if (showSuccessMessage) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
-        <div className="rounded-full bg-emerald-100 p-6">
-          <svg
-            className="h-16 w-16 text-emerald-600"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M5 13l4 4L19 7"
-            />
-          </svg>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
+        <div className="text-center">
+          <p className="text-lg text-gray-900">ご注文ありがとうございます</p>
+          <p className="mt-2 text-sm text-gray-600">カートから注文してください</p>
         </div>
-        <h1 className="text-3xl font-bold text-gray-900">ご注文ありがとうございます</h1>
       </div>
     )
   }

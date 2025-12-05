@@ -6,8 +6,9 @@ import { useCart } from '@/src/contexts/CartContext'
 export default function BottomNavigation() {
   const pathname = usePathname()
   const router = useRouter()
-  const { getItemTypeCount } = useCart()
+  const { getItemTypeCount, items } = useCart()
   const itemTypeCount = getItemTypeCount()
+  const hasUnorderedItems = items.length > 0
 
   const navItems = [
     { path: '/', label: 'メニュー', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
@@ -30,6 +31,7 @@ export default function BottomNavigation() {
         {navItems.map((item) => {
           const active = isActive(item.path)
           const badgeCount = item.hasBadge ? itemTypeCount : 0
+          const showAlert = item.path === '/cart' && hasUnorderedItems
 
           return (
             <button
@@ -55,6 +57,11 @@ export default function BottomNavigation() {
               {badgeCount > 0 && (
                 <span className="absolute right-2 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
                   {badgeCount > 99 ? '99+' : badgeCount}
+                </span>
+              )}
+              {showAlert && (
+                <span className="absolute right-1 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  !
                 </span>
               )}
               <span
