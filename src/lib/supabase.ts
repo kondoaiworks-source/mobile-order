@@ -69,6 +69,30 @@ export async function fetchPendingOrders(): Promise<Order[]> {
   return (data ?? []) as Order[]
 }
 
+export async function fetchOrderHistory(tableNumber?: number): Promise<Order[]> {
+  const client = getSupabaseBrowserClient()
+
+  let query = client
+    .from('orders')
+    .select('id, table_number, status, items, total, created_at, start_time, end_time, duration_seconds')
+    .eq('status', 'completed')
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (tableNumber) {
+    query = query.eq('table_number', tableNumber)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('注文履歴の取得に失敗しました', error)
+    return []
+  }
+
+  return (data ?? []) as Order[]
+}
+
 export async function fetchProducts(): Promise<Product[]> {
   try {
     const client = getSupabaseBrowserClient()

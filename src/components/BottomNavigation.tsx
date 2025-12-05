@@ -6,8 +6,8 @@ import { useCart } from '@/src/contexts/CartContext'
 export default function BottomNavigation() {
   const pathname = usePathname()
   const router = useRouter()
-  const { getItemCount } = useCart()
-  const itemCount = getItemCount()
+  const { getItemTypeCount } = useCart()
+  const itemTypeCount = getItemTypeCount()
 
   const navItems = [
     { path: '/', label: 'メニュー', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
@@ -29,7 +29,7 @@ export default function BottomNavigation() {
       <div className="flex h-16 items-center justify-around">
         {navItems.map((item) => {
           const active = isActive(item.path)
-          const badgeCount = item.hasBadge ? itemCount : 0
+          const badgeCount = item.hasBadge ? itemTypeCount : 0
 
           return (
             <button
