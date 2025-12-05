@@ -99,8 +99,10 @@ export default function CategoryPage() {
     if (currentProduct) {
       addToCart(currentProduct, quantity)
       setShowSuccessOverlay(true)
+      // 「追加しました」を表示した後、メインページへ遷移
       setTimeout(() => {
         setShowSuccessOverlay(false)
+        router.push('/')
       }, 1000)
     }
   }

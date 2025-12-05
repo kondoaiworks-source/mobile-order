@@ -1,0 +1,15 @@
+## Build folders
+.next/
+.vercel/
+
+# Dependencies
+node_modules/
+
+# Supabase generated/cache
+supabase/.temp/
+supabase/.cache/
+
+# Env
+.env
+.env.local
+ Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
