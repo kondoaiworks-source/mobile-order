@@ -25,15 +25,17 @@ export default function CartPage() {
   const [tableNumber, setTableNumber] = useState(1)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'cart' | 'history'>('cart')
+  const [activeTab, setActiveTab] = useState<'cart' | 'checkout'>('cart')
   const [orderHistory, setOrderHistory] = useState<Order[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
+  const [showCheckoutButton, setShowCheckoutButton] = useState(false)
+  const [showCheckoutMessage, setShowCheckoutMessage] = useState(false)
 
   const total = getTotal()
 
   useEffect(() => {
-    if (activeTab === 'history') {
+    if (activeTab === 'checkout') {
       loadOrderHistory()
     }
   }, [activeTab, tableNumber])
@@ -79,9 +81,10 @@ export default function CartPage() {
       clearCart()
       setShowSuccessMessage(true)
       
-      // 3秒後にメッセージを消す
+      // 3秒後にメニュー画面に戻る
       setTimeout(() => {
         setShowSuccessMessage(false)
+        router.push('/')
       }, 3000)
     } catch (err) {
       console.error('注文送信エラー:', err)
@@ -91,13 +94,36 @@ export default function CartPage() {
     }
   }
 
+  const handleCheckout = () => {
+    setActiveTab('checkout')
+    setShowCheckoutButton(true)
+  }
+
+  const handleCheckoutConfirm = () => {
+    setShowCheckoutMessage(true)
+    setTimeout(() => {
+      setShowCheckoutMessage(false)
+      setShowCheckoutButton(false)
+    }, 10000)
+  }
+
   // 注文完了メッセージ表示中
   if (showSuccessMessage) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
         <div className="text-center">
           <p className="text-lg text-gray-900">ご注文ありがとうございます</p>
-          <p className="mt-2 text-sm text-gray-600">カートから注文してください</p>
+        </div>
+      </div>
+    )
+  }
+
+  // 会計メッセージ表示中
+  if (showCheckoutMessage) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
+        <div className="text-center">
+          <p className="text-2xl font-bold text-gray-900">レジへお越しください</p>
         </div>
       </div>
     )
@@ -169,19 +195,14 @@ export default function CartPage() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('history')}
+          onClick={() => setActiveTab('checkout')}
           className={`flex-1 border-b-2 px-4 py-2 text-center font-medium transition-colors ${
-            activeTab === 'history'
+            activeTab === 'checkout'
               ? 'border-emerald-600 text-emerald-600'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          <span className="flex items-center justify-center gap-2">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            注文履歴
-          </span>
+          会計
         </button>
       </div>
 
@@ -272,30 +293,51 @@ export default function CartPage() {
             </div>
           )}
 
-          {/* 注文ボタン */}
-          <button
-            type="button"
-            onClick={handlePlaceOrder}
-            disabled={isPlacingOrder}
-            className="w-full rounded-lg bg-emerald-600 px-6 py-4 text-lg font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isPlacingOrder ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                注文処理中...
-              </span>
-            ) : (
-              '注文する'
-            )}
-          </button>
+          {/* 3つのボタン */}
+          <div className="space-y-3">
+            {/* 注文するボタン */}
+            <button
+              type="button"
+              onClick={handlePlaceOrder}
+              disabled={isPlacingOrder}
+              className="w-full rounded-lg bg-emerald-600 px-6 py-4 text-lg font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isPlacingOrder ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  注文処理中...
+                </span>
+              ) : (
+                '注文する'
+              )}
+            </button>
+
+            {/* 会計するボタン */}
+            <button
+              type="button"
+              onClick={handleCheckout}
+              className="w-full rounded-lg bg-blue-600 px-6 py-4 text-lg font-semibold text-white transition hover:bg-blue-500"
+            >
+              会計する
+            </button>
+
+            {/* 他を追加するボタン */}
+            <button
+              type="button"
+              onClick={() => router.push('/')}
+              className="w-full rounded-lg border-2 border-gray-300 bg-white px-6 py-4 text-lg font-semibold text-gray-700 transition hover:bg-gray-50"
+            >
+              他を追加する
+            </button>
+          </div>
         </>
       )}
 
-      {/* 注文履歴タブ */}
-      {activeTab === 'history' && (
+      {/* 会計タブ */}
+      {activeTab === 'checkout' && (
         <div className="space-y-4">
           {loadingHistory ? (
             <p className="text-center text-gray-500">読み込み中...</p>
@@ -343,21 +385,31 @@ export default function CartPage() {
                   </span>
                 </div>
               </div>
+
+              {/* 会計ボタン */}
+              {showCheckoutButton && (
+                <div className="mt-6 space-y-3">
+                  <div className="rounded-lg border border-gray-200 bg-white p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-lg font-semibold text-gray-700">会計金額</span>
+                      <span className="text-2xl font-bold text-emerald-600">
+                        {currencyFormatter.format(historyTotal)}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCheckoutConfirm}
+                      className="w-full rounded-lg bg-emerald-600 px-6 py-4 text-lg font-semibold text-white transition hover:bg-emerald-500"
+                    >
+                      会計します
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
       )}
-
-      {/* 会計ボタン（画面最下部） */}
-      <div className="fixed bottom-20 left-0 right-0 z-40 border-t border-gray-200 bg-white px-4 py-3 shadow-lg sm:hidden">
-        <button
-          type="button"
-          onClick={() => router.push('/checkout')}
-          className="w-full rounded-lg bg-blue-600 px-6 py-3 text-lg font-semibold text-white transition hover:bg-blue-500"
-        >
-          会計する
-        </button>
-      </div>
     </div>
   )
 }
