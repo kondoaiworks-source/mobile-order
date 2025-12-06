@@ -75,6 +75,7 @@ export async function fetchOrderHistory(tableNumber?: number): Promise<Order[]> 
   let query = client
     .from('orders')
     .select('id, table_number, status, items, total, created_at, start_time, end_time, duration_seconds')
+    // completedステータスのみを取得（会計済みのcheckout_completedとcheckout_requestedは除外）
     .eq('status', 'completed')
     .order('created_at', { ascending: false })
     .limit(50)
@@ -90,7 +91,16 @@ export async function fetchOrderHistory(tableNumber?: number): Promise<Order[]> 
     return []
   }
 
-  return (data ?? []) as Order[]
+  // checkout_completedやcheckout_requestedのステータスを持つ注文を明示的に除外
+  // （.eq('status', 'completed')で既に除外されているが、念のため二重チェック）
+  const filteredData = (data ?? []).filter(
+    (order) => 
+      order.status === 'completed' && 
+      order.status !== 'checkout_completed' && 
+      order.status !== 'checkout_requested'
+  )
+
+  return filteredData as Order[]
 }
 
 export async function fetchProducts(): Promise<Product[]> {
@@ -199,11 +209,29 @@ export async function completeCheckout(tableNumber: number): Promise<void> {
   try {
     const client = getSupabaseBrowserClient()
 
-    const { error } = await client
+    // 最新の会計依頼中の注文を取得（created_atが最新のもの）
+    const { data: checkoutRequestedOrders, error: fetchError } = await client
       .from('orders')
-      .update({ status: 'completed' })
+      .select('id')
       .eq('table_number', tableNumber)
       .eq('status', 'checkout_requested')
+      .order('created_at', { ascending: false })
+      .limit(1)
+
+    if (fetchError) {
+      console.error('会計依頼中の注文の取得に失敗しました', fetchError)
+      throw new Error(`会計依頼中の注文の取得に失敗しました: ${fetchError.message}`)
+    }
+
+    if (!checkoutRequestedOrders || checkoutRequestedOrders.length === 0) {
+      throw new Error('会計依頼中の注文が見つかりません')
+    }
+
+    // 最新の会計依頼中の注文のみを'checkout_completed'ステータスに更新
+    const { error } = await client
+      .from('orders')
+      .update({ status: 'checkout_completed' })
+      .eq('id', checkoutRequestedOrders[0].id)
 
     if (error) {
       console.error('会計完了の更新に失敗しました', error)

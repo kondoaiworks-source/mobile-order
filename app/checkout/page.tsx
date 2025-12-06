@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useCart } from '@/src/contexts/CartContext'
 import { fetchOrderHistory, requestCheckout, getSupabaseBrowserClient } from '@/src/lib/supabase'
 import type { Order } from '@/src/types'
@@ -29,9 +29,21 @@ export default function CheckoutPage() {
   const [showCheckoutMessage, setShowCheckoutMessage] = useState(false)
   const [isRequestingCheckout, setIsRequestingCheckout] = useState(false)
 
+  const loadOrderHistory = useCallback(async () => {
+    setLoadingHistory(true)
+    try {
+      const history = await fetchOrderHistory(tableNumber)
+      setOrderHistory(history)
+    } catch (err) {
+      console.error('注文履歴の読み込みエラー:', err)
+    } finally {
+      setLoadingHistory(false)
+    }
+  }, [tableNumber])
+
   useEffect(() => {
     loadOrderHistory()
-  }, [tableNumber])
+  }, [loadOrderHistory])
 
   useEffect(() => {
     const client = getSupabaseBrowserClient()
@@ -49,12 +61,21 @@ export default function CheckoutPage() {
         (payload) => {
           const updatedOrder = payload.new as Order | null
           const oldOrder = payload.old as Order | null
-          // 会計完了時（statusが'checkout_requested'から'completed'に変更された時）にリセット
-          if (updatedOrder && updatedOrder.status === 'completed' && oldOrder?.status === 'checkout_requested') {
+          
+          if (!updatedOrder || !oldOrder) return
+
+          // 会計リクエスト送信時（completed → checkout_requested）: 注文履歴を更新
+          if (updatedOrder.status === 'checkout_requested' && oldOrder.status === 'completed') {
+            loadOrderHistory() // checkout_requestedになった注文は除外される
+            return
+          }
+
+          // 会計完了時（checkout_requested → checkout_completed）: 画面をリセット
+          if (updatedOrder.status === 'checkout_completed' && oldOrder.status === 'checkout_requested') {
             clearCart()
             setShowCheckoutButton(false)
             setShowCheckoutMessage(false)
-            loadOrderHistory() // 注文履歴を再読み込み
+            loadOrderHistory() // 注文履歴を再読み込み（checkout_completedは除外される）
           }
         }
       )
@@ -63,19 +84,7 @@ export default function CheckoutPage() {
     return () => {
       client.removeChannel(channel)
     }
-  }, [tableNumber, clearCart])
-
-  const loadOrderHistory = async () => {
-    setLoadingHistory(true)
-    try {
-      const history = await fetchOrderHistory(tableNumber)
-      setOrderHistory(history)
-    } catch (err) {
-      console.error('注文履歴の読み込みエラー:', err)
-    } finally {
-      setLoadingHistory(false)
-    }
-  }
+  }, [tableNumber, clearCart, loadOrderHistory])
 
   const handleCheckout = async () => {
     if (orderHistory.length === 0) {
@@ -85,6 +94,8 @@ export default function CheckoutPage() {
     setIsRequestingCheckout(true)
     try {
       await requestCheckout(tableNumber, historyTotal)
+      // 会計リクエスト送信後、注文履歴を再読み込み（checkout_requestedになった注文は除外される）
+      await loadOrderHistory()
       setShowCheckoutButton(true)
     } catch (err) {
       console.error('会計リクエストエラー:', err)

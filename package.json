@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "migration:show": "node scripts/apply-checkout-completed-migration.js",
+    "reset:orders": "node scripts/reset-orders-data.js",
+    "reset:orders:all": "node scripts/reset-orders-data.js --all",
+    "reset:orders:completed": "node scripts/reset-orders-data.js --completed",
+    "reset:orders:checkout": "node scripts/reset-orders-data.js --checkout"
   },
   "dependencies": {
     "next": "^14.0.0",
