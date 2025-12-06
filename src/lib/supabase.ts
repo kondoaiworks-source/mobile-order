@@ -76,6 +76,7 @@ export async function fetchOrderHistory(tableNumber?: number): Promise<Order[]> 
     .from('orders')
     .select('id, table_number, status, items, total, created_at, start_time, end_time, duration_seconds')
     // completedステータスのみを取得（会計済みのcheckout_completedとcheckout_requestedは除外）
+    // 注意: データベースにcheckout_completedステータスが追加されていない場合、completeCheckoutが失敗する可能性がある
     .eq('status', 'completed')
     .order('created_at', { ascending: false })
     .limit(50)
@@ -92,12 +93,17 @@ export async function fetchOrderHistory(tableNumber?: number): Promise<Order[]> 
   }
 
   // checkout_completedやcheckout_requestedのステータスを持つ注文を明示的に除外
-  // （.eq('status', 'completed')で既に除外されているが、念のため二重チェック）
+  // データベースマイグレーションが実行されていない場合でも、クライアント側で確実に除外
+  // 厨房側で会計済み（checkout_completed）にしたデータは次回以降表示されないようにする
   const filteredData = (data ?? []).filter(
-    (order) => 
-      order.status === 'completed' && 
-      order.status !== 'checkout_completed' && 
-      order.status !== 'checkout_requested'
+    (order) => {
+      // completedステータスのみを許可し、会計関連のステータスは除外
+      return (
+        order.status === 'completed' && 
+        order.status !== 'checkout_completed' && 
+        order.status !== 'checkout_requested'
+      )
+    }
   )
 
   return filteredData as Order[]
