@@ -59,6 +59,8 @@ export async function fetchPendingOrders(): Promise<Order[]> {
     .from('orders')
     .select('id, table_number, status, items, total, created_at, start_time, end_time, duration_seconds')
     .in('status', ['pending', 'preparing', 'checkout_requested'])
+    // checkout_completedステータスを確実に除外
+    .neq('status', 'checkout_completed')
     .order('created_at', { ascending: true })
 
   if (error) {
@@ -78,6 +80,10 @@ export async function fetchOrderHistory(tableNumber?: number): Promise<Order[]> 
     // completedステータスのみを取得（会計済みのcheckout_completedとcheckout_requestedは除外）
     // 注意: データベースにcheckout_completedステータスが追加されていない場合、completeCheckoutが失敗する可能性がある
     .eq('status', 'completed')
+    // checkout_completedステータスを確実に除外
+    .neq('status', 'checkout_completed')
+    // checkout_requestedステータスも除外
+    .neq('status', 'checkout_requested')
     .order('created_at', { ascending: false })
     .limit(50)
 
@@ -92,9 +98,8 @@ export async function fetchOrderHistory(tableNumber?: number): Promise<Order[]> 
     return []
   }
 
-  // checkout_completedやcheckout_requestedのステータスを持つ注文を明示的に除外
-  // データベースマイグレーションが実行されていない場合でも、クライアント側で確実に除外
-  // 厨房側で会計済み（checkout_completed）にしたデータは次回以降表示されないようにする
+  // 念のため、クライアント側でもcheckout_completedやcheckout_requestedを除外
+  // データベースマイグレーションが実行されていない場合でも、確実に除外するため
   const filteredData = (data ?? []).filter(
     (order) => {
       // completedステータスのみを許可し、会計関連のステータスは除外
@@ -177,12 +182,14 @@ export async function requestCheckout(tableNumber: number, total: number): Promi
     const client = getSupabaseBrowserClient()
 
     // 該当テーブルの完了済み注文を会計依頼中に更新
-    // 最新の完了済み注文を取得して更新
+    // 最新の完了済み注文を取得して更新（checkout_completedは除外）
     const { data: completedOrders, error: fetchError } = await client
       .from('orders')
       .select('id')
       .eq('table_number', tableNumber)
       .eq('status', 'completed')
+      // checkout_completedステータスを確実に除外
+      .neq('status', 'checkout_completed')
       .order('created_at', { ascending: false })
       .limit(1)
 
