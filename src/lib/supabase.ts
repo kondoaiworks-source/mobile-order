@@ -100,14 +100,21 @@ export async function fetchOrderHistory(tableNumber?: number): Promise<Order[]> 
   const filteredData = (data ?? []).filter(
     (order) => {
       // completedステータスのみを許可し、会計関連のステータスは確実に除外
-      // デバッグ用：除外される注文をログに出力
-      if (order.status && order.status !== 'completed') {
-        console.warn(`⚠️ fetchOrderHistory: 除外された注文 - id=${order.id}, status=${order.status}, table=${order.table_number}`)
+      const isValid = order.status === 'completed'
+      
+      // デバッグ用：取得されたすべての注文をログに出力
+      console.log(`📋 fetchOrderHistory: id=${order.id?.substring(0, 8)}..., status=${order.status}, table=${order.table_number}, isValid=${isValid}`)
+      
+      // checkout_completedやcheckout_requestedが含まれていた場合、警告を出力
+      if (order.status === 'checkout_completed' || order.status === 'checkout_requested') {
+        console.error(`❌ エラー: checkout_completedまたはcheckout_requestedの注文が取得されました！ id=${order.id}, status=${order.status}`)
       }
       
-      return order.status === 'completed'
+      return isValid
     }
   )
+
+  console.log(`✅ fetchOrderHistory: フィルタリング後 ${filteredData.length}件（取得: ${data?.length || 0}件）`)
 
   return filteredData as Order[]
 }
