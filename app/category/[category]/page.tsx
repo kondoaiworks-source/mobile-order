@@ -157,20 +157,22 @@ export default function CategoryPage() {
 
       {/* メニューカード */}
       <div
-        className="flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-8"
+        className="flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-6"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
         <div className="w-full max-w-md">
           <div className="overflow-hidden rounded-2xl bg-white shadow-lg">
-            {/* 画像 */}
-            <button
-              type="button"
-              onClick={() => setIsImageModalOpen(true)}
-              className="relative block w-full"
-            >
-              <div className="aspect-square w-full overflow-hidden bg-gray-200">
+            {/* 横型レイアウト: 左に画像、右に情報 */}
+            <div className="flex gap-3 p-3 sm:gap-4 sm:p-4">
+              {/* 左側: 画像 */}
+              <button
+                type="button"
+                onClick={() => setIsImageModalOpen(true)}
+                className="relative flex-shrink-0 w-24 h-24 sm:w-32 sm:h-32 overflow-hidden rounded-lg bg-gray-200"
+                aria-label="画像を拡大"
+              >
                 {currentProduct.image_url ? (
                   <img
                     src={currentProduct.image_url}
@@ -178,120 +180,116 @@ export default function CategoryPage() {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center bg-gradient-to-br from-emerald-100 to-emerald-200">
-                    <span className="text-2xl font-semibold text-gray-700">{currentProduct.name}</span>
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-100 to-emerald-200">
+                    <span className="text-xs sm:text-sm font-semibold text-gray-700 text-center px-1 sm:px-2">{currentProduct.name}</span>
                   </div>
                 )}
-              </div>
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/40 to-transparent p-4">
-                <div className="flex items-center justify-between text-white">
-                  <span className="text-sm">
-                    {currentIndex + 1} / {products.length}
-                  </span>
-                  <span className="text-sm">タップで拡大</span>
-                </div>
-              </div>
-            </button>
+              </button>
 
-            {/* 商品情報 */}
-            <div className="p-6">
-              <h2 className="text-2xl font-bold text-gray-900">{currentProduct.name}</h2>
-              {currentProduct.description && (
-                <p className="mt-3 text-gray-600">{currentProduct.description}</p>
-              )}
-              <div className="mt-6 flex items-center justify-between">
-                <span className="text-3xl font-bold text-emerald-600">
-                  {currencyFormatter.format(currentProduct.price)}
-                </span>
-              </div>
-
-              {/* 数量選択とカート追加 */}
-              <div className="mt-6 space-y-4">
-                {/* 数量選択 */}
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">数量</span>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={quantity <= 1}
-                      aria-label="数量を減らす"
-                    >
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                      </svg>
-                    </button>
-                    <span className="min-w-[3rem] text-center text-lg font-semibold text-gray-900">
-                      {quantity}
+              {/* 右側: 商品情報 */}
+              <div className="flex-1 flex flex-col justify-between min-w-0">
+                <div className="flex-1 min-h-0">
+                  <h2 className="text-base sm:text-lg font-bold text-gray-900 line-clamp-2 leading-tight">{currentProduct.name}</h2>
+                  {currentProduct.description && (
+                    <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm text-gray-600 line-clamp-2 leading-snug">{currentProduct.description}</p>
+                  )}
+                  <div className="mt-2 sm:mt-3">
+                    <span className="text-lg sm:text-xl font-bold text-emerald-600">
+                      {currencyFormatter.format(currentProduct.price)}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setQuantity(quantity + 1)}
-                      className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                      aria-label="数量を増やす"
-                    >
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                    </button>
                   </div>
                 </div>
 
-                {/* カート追加ボタン */}
-                <button
-                  type="button"
-                  onClick={handleAddToCart}
-                  className="w-full rounded-lg bg-emerald-600 px-6 py-4 text-lg font-semibold text-white transition hover:bg-emerald-500 active:scale-95"
-                >
-                  カートに追加
-                </button>
+                {/* 数量選択とカート追加 */}
+                <div className="mt-3 sm:mt-4 space-y-2 sm:space-y-3">
+                  {/* 数量選択 */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-700">数量</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                        className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                        disabled={quantity <= 1}
+                        aria-label="数量を減らす"
+                      >
+                        <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                        </svg>
+                      </button>
+                      <span className="min-w-[1.75rem] sm:min-w-[2rem] text-center text-sm sm:text-base font-semibold text-gray-900">
+                        {quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(quantity + 1)}
+                        className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 active:scale-95"
+                        aria-label="数量を増やす"
+                      >
+                        <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* カート追加ボタン */}
+                  <button
+                    type="button"
+                    onClick={handleAddToCart}
+                    className="w-full rounded-lg bg-emerald-600 px-3 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-semibold text-white transition hover:bg-emerald-500 active:scale-95"
+                  >
+                    カートに追加
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* ナビゲーションボタン */}
-          <div className="mt-6 flex items-center justify-center gap-4">
-            <button
-              type="button"
-              onClick={goToPrevious}
-              disabled={currentIndex === 0}
-              className="rounded-full bg-white p-3 shadow-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-              aria-label="前のメニュー"
-            >
-              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-              </svg>
-            </button>
-            <span className="text-sm text-gray-500">
-              {currentIndex + 1} / {products.length}
-            </span>
-            <button
-              type="button"
-              onClick={goToNext}
-              disabled={currentIndex === products.length - 1}
-              className="rounded-full bg-white p-3 shadow-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-              aria-label="次のメニュー"
-            >
-              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-          </div>
-
-          {/* インジケーター */}
-          <div className="mt-4 flex justify-center gap-2">
-            {products.map((_, index) => (
+          {/* ナビゲーションボタンとインジケーター */}
+          <div className="mt-4 flex flex-col items-center gap-3">
+            <div className="flex items-center justify-center gap-4">
               <button
-                key={index}
                 type="button"
-                onClick={() => setCurrentIndex(index)}
-                className={`h-2 rounded-full transition-all ${
-                  index === currentIndex ? 'w-8 bg-emerald-600' : 'w-2 bg-gray-300'
-                }`}
-                aria-label={`メニュー ${index + 1}へ`}
-              />
-            ))}
+                onClick={goToPrevious}
+                disabled={currentIndex === 0}
+                className="rounded-full bg-white p-2.5 shadow-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                aria-label="前のメニュー"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                </svg>
+              </button>
+              <span className="text-xs text-gray-500 min-w-[4rem] text-center">
+                {currentIndex + 1} / {products.length}
+              </span>
+              <button
+                type="button"
+                onClick={goToNext}
+                disabled={currentIndex === products.length - 1}
+                className="rounded-full bg-white p-2.5 shadow-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                aria-label="次のメニュー"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+
+            {/* インジケーター */}
+            <div className="flex justify-center gap-1.5">
+              {products.map((_, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => setCurrentIndex(index)}
+                  className={`h-1.5 rounded-full transition-all ${
+                    index === currentIndex ? 'w-6 bg-emerald-600' : 'w-1.5 bg-gray-300'
+                  }`}
+                  aria-label={`メニュー ${index + 1}へ`}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
