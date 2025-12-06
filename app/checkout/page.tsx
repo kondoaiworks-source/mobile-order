@@ -48,9 +48,12 @@ export default function CheckoutPage() {
         },
         (payload) => {
           const updatedOrder = payload.new as Order | null
-          // 会計完了時（statusが'completed'に変更された時）にリセット
-          if (updatedOrder && updatedOrder.status === 'completed') {
+          const oldOrder = payload.old as Order | null
+          // 会計完了時（statusが'checkout_requested'から'completed'に変更された時）にリセット
+          if (updatedOrder && updatedOrder.status === 'completed' && oldOrder?.status === 'checkout_requested') {
             clearCart()
+            setShowCheckoutButton(false)
+            setShowCheckoutMessage(false)
             loadOrderHistory() // 注文履歴を再読み込み
           }
         }
@@ -60,7 +63,7 @@ export default function CheckoutPage() {
     return () => {
       client.removeChannel(channel)
     }
-  }, [tableNumber])
+  }, [tableNumber, clearCart])
 
   const loadOrderHistory = async () => {
     setLoadingHistory(true)
