@@ -8,7 +8,7 @@ export type Product = {
   is_featured?: boolean
 }
 
-export type OrderStatus = 'pending' | 'preparing' | 'completed'
+export type OrderStatus = 'pending' | 'preparing' | 'completed' | 'checkout_requested'
 
 export type OrderItem = {
   productId: string

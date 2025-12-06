@@ -6,6 +6,7 @@ import {
   fetchPendingOrders,
   getSupabaseBrowserClient,
   updateOrderStatus,
+  completeCheckout,
 } from '@/src/lib/supabase'
 
 const timeFormatter = new Intl.DateTimeFormat('ja-JP', {
@@ -88,8 +89,8 @@ export default function KitchenPage() {
             let next = [...prev]
 
             if (payload.eventType === 'INSERT' && newOrder) {
-              // 'pending' または 'preparing' の注文のみを追加
-              if (newOrder.status === 'pending' || newOrder.status === 'preparing') {
+              // 'pending', 'preparing', 'checkout_requested' の注文を追加
+              if (newOrder.status === 'pending' || newOrder.status === 'preparing' || newOrder.status === 'checkout_requested') {
                 next = [newOrder, ...next.filter((order) => order.id !== newOrder.id)]
               }
             }
@@ -98,8 +99,8 @@ export default function KitchenPage() {
               // 既存の注文を更新または削除
               const existingIndex = next.findIndex((order) => order.id === newOrder.id)
               
-              if (newOrder.status === 'pending' || newOrder.status === 'preparing') {
-                // 'pending' または 'preparing' の注文は更新または追加
+              if (newOrder.status === 'pending' || newOrder.status === 'preparing' || newOrder.status === 'checkout_requested') {
+                // 'pending', 'preparing', 'checkout_requested' の注文は更新または追加
                 if (existingIndex >= 0) {
                   next[existingIndex] = newOrder
                 } else {
@@ -189,6 +190,18 @@ export default function KitchenPage() {
     await handleUpdateStatus(orderId, 'preparing')
   }
 
+  const handleCompleteCheckout = async (tableNumber: number) => {
+    setUpdatingId(`checkout-${tableNumber}`)
+    try {
+      await completeCheckout(tableNumber)
+    } catch (err) {
+      console.error('会計完了エラー:', err)
+      setError(err instanceof Error ? err.message : '会計完了の更新に失敗しました')
+    } finally {
+      setUpdatingId((current) => (current === `checkout-${tableNumber}` ? null : current))
+    }
+  }
+
   const formatCreatedAt = (value?: string) => {
     if (!value) return '時刻不明'
     return timeFormatter.format(new Date(value))
@@ -210,6 +223,9 @@ export default function KitchenPage() {
     )
   }
 
+  const pendingOrders = orders.filter((order) => order.status === 'pending' || order.status === 'preparing')
+  const checkoutRequests = orders.filter((order) => order.status === 'checkout_requested')
+
   return (
     <section className="mx-auto w-full max-w-5xl px-6 py-12">
       <header className="mb-6">
@@ -217,7 +233,78 @@ export default function KitchenPage() {
         <p className="text-gray-600">新しい注文がリアルタイムで表示されます。</p>
       </header>
 
-      {orders.length === 0 ? (
+      {/* 会計依頼中のセクション */}
+      {checkoutRequests.length > 0 && (
+        <div className="mb-8">
+          <h2 className="mb-4 text-xl font-bold text-orange-600">会計依頼中</h2>
+          <div className="overflow-x-auto rounded-lg border-2 border-orange-300 bg-orange-50 shadow-sm">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-orange-100">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    テーブル番号
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    注文情報
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    合計金額
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    ステータス
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    アクション
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 bg-white">
+                {checkoutRequests.map((order) => {
+                  const isUpdating = updatingId === `checkout-${order.table_number}`
+                  return (
+                    <tr key={order.id} className="bg-orange-50">
+                      <td className="px-4 py-4">
+                        <span className="text-xl font-bold text-gray-900">
+                          {order.table_number || '未設定'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-gray-500">注文ID: {order.id}</span>
+                          <span className="mt-1 text-lg font-medium text-gray-700">
+                            受付 {formatCreatedAt(order.created_at)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-lg font-bold text-emerald-600">
+                        ¥{order.total.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="inline-block rounded-full bg-orange-200 px-3 py-1 text-xs font-semibold text-orange-800">
+                          会計依頼中
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-sm">
+                        <button
+                          type="button"
+                          onClick={() => handleCompleteCheckout(order.table_number)}
+                          disabled={isUpdating}
+                          className="rounded-md bg-emerald-600 px-4 py-2 text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isUpdating ? '処理中...' : '会計完了'}
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 通常の注文セクション */}
+      {pendingOrders.length === 0 ? (
         <p className="text-gray-500">現在、保留中の注文はありません。</p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -242,9 +329,7 @@ export default function KitchenPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
-              {orders
-                .filter((order) => order.status === 'pending' || order.status === 'preparing')
-                .map((order) => {
+              {pendingOrders.map((order) => {
                   const isPending = order.status === 'pending'
                   const isPreparing = order.status === 'preparing'
                   const isUpdating = updatingId === order.id

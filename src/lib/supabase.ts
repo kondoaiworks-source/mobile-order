@@ -58,7 +58,7 @@ export async function fetchPendingOrders(): Promise<Order[]> {
   const { data, error } = await client
     .from('orders')
     .select('id, table_number, status, items, total, created_at, start_time, end_time, duration_seconds')
-    .in('status', ['pending', 'preparing'])
+    .in('status', ['pending', 'preparing', 'checkout_requested'])
     .order('created_at', { ascending: true })
 
   if (error) {
@@ -154,6 +154,65 @@ export async function updateOrderStatus(id: string, status: Order['status']): Pr
   }
 
   return data as Order
+}
+
+export async function requestCheckout(tableNumber: number, total: number): Promise<void> {
+  try {
+    const client = getSupabaseBrowserClient()
+
+    // 該当テーブルの完了済み注文を会計依頼中に更新
+    // 最新の完了済み注文を取得して更新
+    const { data: completedOrders, error: fetchError } = await client
+      .from('orders')
+      .select('id')
+      .eq('table_number', tableNumber)
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(1)
+
+    if (fetchError) {
+      console.error('注文の取得に失敗しました', fetchError)
+      throw new Error(`注文の取得に失敗しました: ${fetchError.message}`)
+    }
+
+    if (!completedOrders || completedOrders.length === 0) {
+      throw new Error('会計対象の注文が見つかりません')
+    }
+
+    // 最新の完了済み注文を会計依頼中に更新
+    const { error } = await client
+      .from('orders')
+      .update({ status: 'checkout_requested' })
+      .eq('id', completedOrders[0].id)
+
+    if (error) {
+      console.error('会計リクエストの送信に失敗しました', error)
+      throw new Error(`会計リクエストの送信に失敗しました: ${error.message}`)
+    }
+  } catch (err) {
+    console.error('requestCheckout エラー:', err)
+    throw err
+  }
+}
+
+export async function completeCheckout(tableNumber: number): Promise<void> {
+  try {
+    const client = getSupabaseBrowserClient()
+
+    const { error } = await client
+      .from('orders')
+      .update({ status: 'completed' })
+      .eq('table_number', tableNumber)
+      .eq('status', 'checkout_requested')
+
+    if (error) {
+      console.error('会計完了の更新に失敗しました', error)
+      throw new Error(`会計完了の更新に失敗しました: ${error.message}`)
+    }
+  } catch (err) {
+    console.error('completeCheckout エラー:', err)
+    throw err
+  }
 }
 
 // 商品管理用の関数

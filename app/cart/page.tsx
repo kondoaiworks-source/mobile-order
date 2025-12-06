@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { useCart } from '@/src/contexts/CartContext'
-import { placeOrder, fetchOrderHistory } from '@/src/lib/supabase'
+import { placeOrder, fetchOrderHistory, getSupabaseBrowserClient } from '@/src/lib/supabase'
 import type { Order } from '@/src/types'
 
 const currencyFormatter = new Intl.NumberFormat('ja-JP', {
@@ -39,6 +39,38 @@ export default function CartPage() {
       loadOrderHistory()
     }
   }, [activeTab, tableNumber])
+
+  useEffect(() => {
+    const client = getSupabaseBrowserClient()
+    
+    const channel = client
+      .channel('cart-checkout-updates')
+      .on(
+        'postgres_changes',
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'orders',
+          filter: `table_number=eq.${tableNumber}`
+        },
+        (payload) => {
+          const updatedOrder = payload.new as Order | null
+          // 会計完了時（statusが'completed'に変更され、以前が'checkout_requested'だった時）にリセット
+          const oldOrder = payload.old as Order | null
+          if (updatedOrder && updatedOrder.status === 'completed' && oldOrder?.status === 'checkout_requested') {
+            clearCart()
+            if (activeTab === 'checkout') {
+              loadOrderHistory() // 注文履歴を再読み込み
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      client.removeChannel(channel)
+    }
+  }, [tableNumber, activeTab])
 
   const loadOrderHistory = async () => {
     setLoadingHistory(true)
@@ -202,7 +234,7 @@ export default function CartPage() {
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          会計
+          注文履歴
         </button>
       </div>
 
@@ -315,14 +347,6 @@ export default function CartPage() {
               )}
             </button>
 
-            {/* 会計するボタン */}
-            <button
-              type="button"
-              onClick={handleCheckout}
-              className="w-full rounded-lg bg-blue-600 px-6 py-4 text-lg font-semibold text-white transition hover:bg-blue-500"
-            >
-              会計する
-            </button>
 
             {/* 他を追加するボタン */}
             <button
@@ -336,7 +360,7 @@ export default function CartPage() {
         </>
       )}
 
-      {/* 会計タブ */}
+      {/* 注文履歴タブ */}
       {activeTab === 'checkout' && (
         <div className="space-y-4">
           {loadingHistory ? (
