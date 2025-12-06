@@ -227,36 +227,54 @@ export async function completeCheckout(tableNumber: number): Promise<void> {
   try {
     const client = getSupabaseBrowserClient()
 
+    console.log(`🔍 completeCheckout: テーブル${tableNumber}の会計完了を開始`)
+
     // 最新の会計依頼中の注文を取得（created_atが最新のもの）
     const { data: checkoutRequestedOrders, error: fetchError } = await client
       .from('orders')
-      .select('id')
+      .select('id, status, created_at')
       .eq('table_number', tableNumber)
       .eq('status', 'checkout_requested')
       .order('created_at', { ascending: false })
       .limit(1)
 
     if (fetchError) {
-      console.error('会計依頼中の注文の取得に失敗しました', fetchError)
+      console.error('❌ 会計依頼中の注文の取得に失敗しました', fetchError)
       throw new Error(`会計依頼中の注文の取得に失敗しました: ${fetchError.message}`)
     }
 
+    console.log(`📋 completeCheckout: 取得した会計依頼中の注文数: ${checkoutRequestedOrders?.length || 0}`)
+    if (checkoutRequestedOrders && checkoutRequestedOrders.length > 0) {
+      console.log(`📋 completeCheckout: 注文ID=${checkoutRequestedOrders[0].id}, status=${checkoutRequestedOrders[0].status}`)
+    }
+
     if (!checkoutRequestedOrders || checkoutRequestedOrders.length === 0) {
+      console.warn(`⚠️ completeCheckout: テーブル${tableNumber}に会計依頼中の注文が見つかりません`)
       throw new Error('会計依頼中の注文が見つかりません')
     }
 
     // 最新の会計依頼中の注文のみを'checkout_completed'ステータスに更新
-    const { error } = await client
+    console.log(`🔄 completeCheckout: 注文ID=${checkoutRequestedOrders[0].id}をcheckout_completedに更新中...`)
+    const { data: updatedOrder, error } = await client
       .from('orders')
       .update({ status: 'checkout_completed' })
       .eq('id', checkoutRequestedOrders[0].id)
+      .select('id, status')
+      .single()
 
     if (error) {
-      console.error('会計完了の更新に失敗しました', error)
+      console.error('❌ 会計完了の更新に失敗しました', error)
+      console.error('❌ エラー詳細:', JSON.stringify(error, null, 2))
       throw new Error(`会計完了の更新に失敗しました: ${error.message}`)
     }
+
+    if (updatedOrder) {
+      console.log(`✅ completeCheckout: 更新成功 - id=${updatedOrder.id}, status=${updatedOrder.status}`)
+    } else {
+      console.warn(`⚠️ completeCheckout: 更新された注文のデータが返されませんでした`)
+    }
   } catch (err) {
-    console.error('completeCheckout エラー:', err)
+    console.error('❌ completeCheckout エラー:', err)
     throw err
   }
 }

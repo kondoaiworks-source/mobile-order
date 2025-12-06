@@ -193,10 +193,17 @@ export default function KitchenPage() {
   const handleCompleteCheckout = async (tableNumber: number) => {
     setUpdatingId(`checkout-${tableNumber}`)
     try {
+      console.log(`🔘 handleCompleteCheckout: テーブル${tableNumber}の会計完了ボタンをクリック`)
       await completeCheckout(tableNumber)
+      console.log(`✅ handleCompleteCheckout: テーブル${tableNumber}の会計完了が成功`)
+      // 成功メッセージを表示（オプション）
+      // alert(`テーブル${tableNumber}の会計が完了しました`)
     } catch (err) {
-      console.error('会計完了エラー:', err)
-      setError(err instanceof Error ? err.message : '会計完了の更新に失敗しました')
+      console.error('❌ 会計完了エラー:', err)
+      const errorMessage = err instanceof Error ? err.message : '会計完了の更新に失敗しました'
+      setError(errorMessage)
+      // エラーメッセージをユーザーに表示
+      alert(`会計完了に失敗しました: ${errorMessage}`)
     } finally {
       setUpdatingId((current) => (current === `checkout-${tableNumber}` ? null : current))
     }
