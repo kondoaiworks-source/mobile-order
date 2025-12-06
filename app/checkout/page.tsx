@@ -33,6 +33,11 @@ export default function CheckoutPage() {
     setLoadingHistory(true)
     try {
       const history = await fetchOrderHistory(tableNumber)
+      // デバッグ用：取得された注文のステータスを確認
+      console.log('📋 注文履歴を取得:', history.length, '件')
+      history.forEach(order => {
+        console.log(`  - id: ${order.id}, status: ${order.status}, table: ${order.table_number}`)
+      })
       setOrderHistory(history)
     } catch (err) {
       console.error('注文履歴の読み込みエラー:', err)
