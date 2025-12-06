@@ -52,7 +52,7 @@ async function runMigration() {
 
   try {
     // Service Role Keyを使用して管理者権限で実行
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    const supabase = createClient(supabaseUrl!, supabaseServiceKey!, {
       auth: {
         autoRefreshToken: false,
         persistSession: false

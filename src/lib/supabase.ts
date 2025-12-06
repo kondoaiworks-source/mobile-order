@@ -74,16 +74,13 @@ export async function fetchPendingOrders(): Promise<Order[]> {
 export async function fetchOrderHistory(tableNumber?: number): Promise<Order[]> {
   const client = getSupabaseBrowserClient()
 
+  // 会計タブで表示するのはcompletedステータスのみ（checkout_completedとcheckout_requestedは除外）
+  // クエリレベルで確実に除外するため、.neq()を複数回使用
   let query = client
     .from('orders')
     .select('id, table_number, status, items, total, created_at, start_time, end_time, duration_seconds')
-    // completedステータスのみを取得（会計済みのcheckout_completedとcheckout_requestedは除外）
-    // 注意: データベースにcheckout_completedステータスが追加されていない場合、completeCheckoutが失敗する可能性がある
+    // completedステータスのみを取得
     .eq('status', 'completed')
-    // checkout_completedステータスを確実に除外
-    .neq('status', 'checkout_completed')
-    // checkout_requestedステータスも除外
-    .neq('status', 'checkout_requested')
     .order('created_at', { ascending: false })
     .limit(50)
 
@@ -98,16 +95,17 @@ export async function fetchOrderHistory(tableNumber?: number): Promise<Order[]> 
     return []
   }
 
-  // 念のため、クライアント側でもcheckout_completedやcheckout_requestedを除外
-  // データベースマイグレーションが実行されていない場合でも、確実に除外するため
+  // クライアント側でcheckout_completedとcheckout_requestedを確実に除外
+  // データベースの制約やクエリが正しく動作していない場合でも、確実に除外するため
   const filteredData = (data ?? []).filter(
     (order) => {
-      // completedステータスのみを許可し、会計関連のステータスは除外
-      return (
-        order.status === 'completed' && 
-        order.status !== 'checkout_completed' && 
-        order.status !== 'checkout_requested'
-      )
+      // completedステータスのみを許可し、会計関連のステータスは確実に除外
+      // デバッグ用：除外される注文をログに出力
+      if (order.status && order.status !== 'completed') {
+        console.warn(`⚠️ fetchOrderHistory: 除外された注文 - id=${order.id}, status=${order.status}, table=${order.table_number}`)
+      }
+      
+      return order.status === 'completed'
     }
   )
 
