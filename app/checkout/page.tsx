@@ -3,8 +3,8 @@
 import { useRouter } from 'next/navigation'
 import { useState, useEffect, useCallback } from 'react'
 import { useCart } from '@/src/contexts/CartContext'
-import { fetchOrderHistory, requestCheckout, getSupabaseBrowserClient } from '@/src/lib/supabase'
-import type { Order } from '@/src/types'
+import { fetchOrderHistory, requestCheckout, getSupabaseBrowserClient, fetchProducts } from '@/src/lib/supabase'
+import type { Order, Product } from '@/src/types'
 
 const currencyFormatter = new Intl.NumberFormat('ja-JP', {
   style: 'currency',
@@ -28,6 +28,8 @@ export default function CheckoutPage() {
   const [showCheckoutButton, setShowCheckoutButton] = useState(false)
   const [showCheckoutMessage, setShowCheckoutMessage] = useState(false)
   const [isRequestingCheckout, setIsRequestingCheckout] = useState(false)
+  const [products, setProducts] = useState<Product[]>([])
+  const [checkoutOrderHistory, setCheckoutOrderHistory] = useState<Order[]>([])
 
   const loadOrderHistory = useCallback(async () => {
     setLoadingHistory(true)
@@ -49,6 +51,19 @@ export default function CheckoutPage() {
   useEffect(() => {
     loadOrderHistory()
   }, [loadOrderHistory])
+
+  // 商品情報を取得
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        const productList = await fetchProducts()
+        setProducts(productList)
+      } catch (err) {
+        console.error('商品情報の読み込みエラー:', err)
+      }
+    }
+    loadProducts()
+  }, [])
 
   useEffect(() => {
     const client = getSupabaseBrowserClient()
@@ -96,6 +111,9 @@ export default function CheckoutPage() {
       return
     }
 
+    // 会計リクエスト送信前に、現在の注文履歴を保存
+    setCheckoutOrderHistory([...orderHistory])
+
     setIsRequestingCheckout(true)
     try {
       await requestCheckout(tableNumber, historyTotal)
@@ -105,6 +123,7 @@ export default function CheckoutPage() {
     } catch (err) {
       console.error('会計リクエストエラー:', err)
       alert('会計リクエストの送信に失敗しました。時間をおいて再度お試しください。')
+      setCheckoutOrderHistory([])
     } finally {
       setIsRequestingCheckout(false)
     }
@@ -118,16 +137,22 @@ export default function CheckoutPage() {
     }, 10000)
   }
 
-  // 会計メッセージ表示中
+  // 商品IDから商品情報を取得
+  const getProductById = (productId: string): Product | undefined => {
+    return products.find(p => p.id === productId)
+  }
+
+  // 会計メッセージ表示中（オーバーレイ）
   if (showCheckoutMessage) {
-    const historyTotal = orderHistory.reduce((sum, order) => sum + order.total, 0)
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
-        <div className="text-center">
-          <p className="text-2xl font-bold text-emerald-600 mb-4">
-            {currencyFormatter.format(historyTotal)}
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50">
+        <div className="rounded-lg bg-white px-8 py-6 shadow-lg text-center">
+          <p className="text-xl font-semibold text-gray-900">
+            ありがとうございました。
           </p>
-          <p className="text-2xl font-bold text-gray-900">レジまでお越しください</p>
+          <p className="text-xl font-semibold text-gray-900 mt-2">
+            レジまでお越しください。
+          </p>
         </div>
       </div>
     )
@@ -226,14 +251,59 @@ export default function CheckoutPage() {
               </button>
             )}
 
-            {/* 会計ボタン表示時 */}
+            {/* 会計ボタン表示時：注文履歴の詳細を表示 */}
             {showCheckoutButton && (
-              <div className="mt-6 space-y-3">
+              <div className="mt-6 space-y-4">
+                {/* 注文履歴の詳細（メニュー項目ごと） */}
+                <div className="space-y-3">
+                  {checkoutOrderHistory.map((order) => (
+                    <div key={order.id} className="rounded-lg border border-gray-200 bg-white p-4">
+                      <p className="text-xs text-gray-500 mb-3">
+                        {order.created_at && dateTimeFormatter.format(new Date(order.created_at))}
+                      </p>
+                      {Array.isArray(order.items) && order.items.length > 0 && (
+                        <div className="space-y-2">
+                          {order.items.map((item, index) => {
+                            const product = getProductById(item.productId)
+                            return (
+                              <div key={index} className="flex items-center justify-between text-sm">
+                                <div className="flex-1">
+                                  <p className="font-medium text-gray-900">
+                                    {product?.name || `商品ID: ${item.productId}`}
+                                  </p>
+                                  {product?.description && (
+                                    <p className="text-xs text-gray-500 mt-0.5">{product.description}</p>
+                                  )}
+                                </div>
+                                <div className="text-right ml-4">
+                                  <p className="text-gray-600">
+                                    {item.quantity}個 × {currencyFormatter.format(item.price)}
+                                  </p>
+                                  <p className="font-semibold text-gray-900">
+                                    {currencyFormatter.format(item.price * item.quantity)}
+                                  </p>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                      <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">小計</span>
+                        <span className="text-lg font-bold text-emerald-600">
+                          {currencyFormatter.format(order.total)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 合計金額 */}
                 <div className="rounded-lg border border-gray-200 bg-white p-4">
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-lg font-semibold text-gray-700">合計金額</span>
                     <span className="text-2xl font-bold text-emerald-600">
-                      {currencyFormatter.format(historyTotal)}
+                      {currencyFormatter.format(checkoutOrderHistory.reduce((sum, order) => sum + order.total, 0))}
                     </span>
                   </div>
                   <button
