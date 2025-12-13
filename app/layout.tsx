@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { CartProvider } from '@/src/contexts/CartContext'
-import BottomNavigation from '@/src/components/BottomNavigation'
+import ConditionalBottomNavigation from '@/src/components/ConditionalBottomNavigation'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -23,7 +23,7 @@ export default function RootLayout({
           <div className="pb-16 sm:pb-0">
             {children}
           </div>
-          <BottomNavigation />
+          <ConditionalBottomNavigation />
         </CartProvider>
       </body>
     </html>
