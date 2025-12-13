@@ -313,6 +313,25 @@ export default function KitchenPage() {
     }
   }
 
+  // メニュー単位でステータスを更新（そのメニューが含まれるすべての注文を更新）
+  const handleUpdateStatusByMenu = async (menuName: string, newStatus: 'preparing' | 'completed') => {
+    const menuItems = expandedOrderItems.filter((item) => item.menuName === menuName)
+    const orderIds = [...new Set(menuItems.map((item) => item.orderId))]
+    
+    // 更新中のIDを設定（メニュー名を使用）
+    setUpdatingId(`menu-${menuName}`)
+    
+    try {
+      // そのメニューが含まれるすべての注文のステータスを更新
+      await Promise.all(orderIds.map((orderId) => handleUpdateStatus(orderId, newStatus)))
+    } catch (err) {
+      console.error('メニュー単位のステータス更新エラー:', err)
+      setError(err instanceof Error ? err.message : 'メニュー単位のステータス更新に失敗しました')
+    } finally {
+      setUpdatingId((current) => (current === `menu-${menuName}` ? null : current))
+    }
+  }
+
   const handleStartCooking = async (orderId: string) => {
     await handleUpdateStatus(orderId, 'preparing')
   }
@@ -592,10 +611,32 @@ export default function KitchenPage() {
                       }`}
                     >
                       <div className="bg-gray-100 px-4 py-3">
-                        <h3 className="text-xl font-bold text-gray-900">{menuName}</h3>
-                        <p className="text-sm text-gray-600">
-                          合計数量: {totalQuantity}個 | 合計金額: ¥{totalAmount.toLocaleString()}
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-xl font-bold text-gray-900">{menuName}</h3>
+                            <p className="text-sm text-gray-600">
+                              {totalQuantity}件 | 合計金額: ¥{totalAmount.toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateStatusByMenu(menuName, 'preparing')}
+                              disabled={updatingId === `menu-${menuName}` || !hasPending || hasPreparing}
+                              className="rounded-md bg-orange-600 px-4 py-2 text-white transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {updatingId === `menu-${menuName}` ? '更新中...' : '調理開始'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateStatusByMenu(menuName, 'completed')}
+                              disabled={updatingId === `menu-${menuName}` || hasPending || !hasPreparing}
+                              className="rounded-md bg-green-600 px-4 py-2 text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {updatingId === `menu-${menuName}` ? '更新中...' : '完了'}
+                            </button>
+                          </div>
+                        </div>
                       </div>
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">

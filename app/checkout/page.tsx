@@ -254,45 +254,29 @@ export default function CheckoutPage() {
             {/* 会計ボタン表示時：注文履歴の詳細を表示 */}
             {showCheckoutButton && (
               <div className="mt-6 space-y-4">
-                {/* 注文履歴の詳細（メニュー項目ごと） */}
+                {/* 注文履歴の詳細（小計は表示せず、最終合計金額のみ表示） */}
                 <div className="space-y-3">
                   {checkoutOrderHistory.map((order) => (
                     <div key={order.id} className="rounded-lg border border-gray-200 bg-white p-4">
-                      <p className="text-xs text-gray-500 mb-3">
-                        {order.created_at && dateTimeFormatter.format(new Date(order.created_at))}
-                      </p>
-                      {Array.isArray(order.items) && order.items.length > 0 && (
-                        <div className="space-y-2">
-                          {order.items.map((item, index) => {
-                            const product = getProductById(item.productId)
-                            return (
-                              <div key={index} className="flex items-center justify-between text-sm">
-                                <div className="flex-1">
-                                  <p className="font-medium text-gray-900">
-                                    {product?.name || `商品ID: ${item.productId}`}
-                                  </p>
-                                  {product?.description && (
-                                    <p className="text-xs text-gray-500 mt-0.5">{product.description}</p>
-                                  )}
-                                </div>
-                                <div className="text-right ml-4">
-                                  <p className="text-gray-600">
-                                    {item.quantity}個 × {currencyFormatter.format(item.price)}
-                                  </p>
-                                  <p className="font-semibold text-gray-900">
-                                    {currencyFormatter.format(item.price * item.quantity)}
-                                  </p>
-                                </div>
-                              </div>
-                            )
-                          })}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-gray-500">
+                            {order.created_at && dateTimeFormatter.format(new Date(order.created_at))}
+                          </p>
+                          <p className="mt-1 text-sm font-medium text-gray-900">
+                            テーブル {order.table_number}
+                          </p>
+                          {Array.isArray(order.items) && (
+                            <p className="mt-1 text-xs text-gray-500">
+                              {order.items.length}点
+                            </p>
+                          )}
                         </div>
-                      )}
-                      <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700">小計</span>
-                        <span className="text-lg font-bold text-emerald-600">
-                          {currencyFormatter.format(order.total)}
-                        </span>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold text-emerald-600">
+                            {currencyFormatter.format(order.total)}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   ))}
