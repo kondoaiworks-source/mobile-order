@@ -53,11 +53,12 @@ function ElapsedTime({ startTime }: { startTime?: string }) {
 function KitchenBottomNavigation({ activeTab, onTabChange }: { activeTab: 'table' | 'menu', onTabChange: (tab: 'table' | 'menu') => void }) {
   const router = useRouter()
 
+  // フッターメニューの項目（左から順番に配置）
   const navItems = [
-    { id: 'table', label: 'テーブル', icon: '🍽️', path: null },
-    { id: 'menu', label: 'メニュー', icon: '📜', path: null },
-    { id: 'call', label: '呼出', icon: '🔔', path: '/call' },
-    { id: 'settings', label: '設定', icon: '⚙️', path: '/settings' },
+    { id: 'table', label: 'テーブル', icon: '🍽️', path: null },      // 1. テーブル
+    { id: 'menu', label: 'メニュー', icon: '📜', path: null },         // 2. メニュー
+    { id: 'call', label: '呼出', icon: '🔔', path: '/call' },         // 3. 呼出
+    { id: 'settings', label: '設定', icon: '⚙️', path: '/settings' }, // 4. 設定
   ]
 
   const handleClick = (item: typeof navItems[0]) => {
