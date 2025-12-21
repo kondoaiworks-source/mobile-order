@@ -9,6 +9,7 @@ import {
   updateOrderStatus,
   completeCheckout,
   fetchProducts,
+  updateMenuItemStatus,
 } from '@/src/lib/supabase'
 
 const timeFormatter = new Intl.DateTimeFormat('ja-JP', {
@@ -99,15 +100,15 @@ function KitchenBottomNavigation({ activeTab, onTabChange }: { activeTab: 'table
 // メニュー単位で展開された注文項目の型
 type ExpandedOrderItem = {
   orderId: string
+  itemIndex: number
   tableNumber: number
   menuName: string
   quantity: number
   price: number
-  subtotal: number
-  status: Order['status']
+  amount: number
+  status: 'pending' | 'preparing' | 'served'
   createdAt?: string
-  startTime?: string
-  orderTotal: number
+  orderCreatedAt?: string
 }
 
 export default function KitchenPage() {
@@ -118,6 +119,7 @@ export default function KitchenPage() {
   const [error, setError] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'table' | 'menu'>('table')
+  const [servingItems, setServingItems] = useState<Set<string>>(new Set())
 
   // 商品情報を取得
   useEffect(() => {
@@ -187,6 +189,11 @@ export default function KitchenPage() {
                   next.splice(existingIndex, 1)
                 }
               }
+              
+              // itemsが更新された場合も更新
+              if (existingIndex >= 0 && JSON.stringify(newOrder.items) !== JSON.stringify(next[existingIndex]?.items)) {
+                next[existingIndex] = newOrder
+              }
             }
 
             if (payload.eventType === 'DELETE' && oldOrder) {
@@ -211,25 +218,32 @@ export default function KitchenPage() {
     return product?.name || `商品ID: ${productId}`
   }
 
-  // 注文をメニュー単位で展開
+  // 注文をメニュー単位で展開（古い順でソート）
   const expandedOrderItems = useMemo<ExpandedOrderItem[]>(() => {
-    const pendingOrders = orders.filter((order) => order.status === 'pending' || order.status === 'preparing')
+    const pendingOrders = orders
+      .filter((order) => order.status === 'pending' || order.status === 'preparing')
+      .sort((a, b) => {
+        // 古い順（created_at昇順）
+        if (!a.created_at || !b.created_at) return 0
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      })
+
     const items: ExpandedOrderItem[] = []
 
     pendingOrders.forEach((order) => {
       if (Array.isArray(order.items)) {
-        order.items.forEach((item) => {
+        order.items.forEach((item, index) => {
           items.push({
             orderId: order.id,
+            itemIndex: index,
             tableNumber: order.table_number,
             menuName: getProductName(item.productId),
             quantity: item.quantity,
             price: item.price,
-            subtotal: item.price * item.quantity,
-            status: order.status,
+            amount: item.price * item.quantity,
+            status: (item.status || 'pending') as 'pending' | 'preparing' | 'served',
             createdAt: order.created_at,
-            startTime: order.start_time,
-            orderTotal: order.total,
+            orderCreatedAt: order.created_at,
           })
         })
       }
@@ -238,29 +252,6 @@ export default function KitchenPage() {
     return items
   }, [orders, products])
 
-  // テーブル番号ごとにグループ化
-  const ordersByTable = useMemo(() => {
-    const grouped: Record<number, ExpandedOrderItem[]> = {}
-    expandedOrderItems.forEach((item) => {
-      if (!grouped[item.tableNumber]) {
-        grouped[item.tableNumber] = []
-      }
-      grouped[item.tableNumber].push(item)
-    })
-    return grouped
-  }, [expandedOrderItems])
-
-  // メニューごとにグループ化
-  const ordersByMenu = useMemo(() => {
-    const grouped: Record<string, ExpandedOrderItem[]> = {}
-    expandedOrderItems.forEach((item) => {
-      if (!grouped[item.menuName]) {
-        grouped[item.menuName] = []
-      }
-      grouped[item.menuName].push(item)
-    })
-    return grouped
-  }, [expandedOrderItems])
 
   const handleUpdateStatus = async (orderId: string, newStatus: 'pending' | 'preparing' | 'completed') => {
     setUpdatingId(orderId)
@@ -313,27 +304,102 @@ export default function KitchenPage() {
     }
   }
 
-  // メニュー単位でステータスを更新（そのメニューが含まれるすべての注文を更新）
-  const handleUpdateStatusByMenu = async (menuName: string, newStatus: 'preparing' | 'completed') => {
-    const menuItems = expandedOrderItems.filter((item) => item.menuName === menuName)
-    const orderIds = [...new Set(menuItems.map((item) => item.orderId))]
-    
-    // 更新中のIDを設定（メニュー名を使用）
-    setUpdatingId(`menu-${menuName}`)
-    
+  // メニュー項目のステータスを更新
+  const handleMenuItemStatusUpdate = async (
+    orderId: string,
+    itemIndex: number,
+    newStatus: 'pending' | 'preparing' | 'served'
+  ) => {
+    const updateKey = `${orderId}-${itemIndex}`
+    setUpdatingId(updateKey)
     try {
-      // そのメニューが含まれるすべての注文のステータスを更新
-      await Promise.all(orderIds.map((orderId) => handleUpdateStatus(orderId, newStatus)))
+      const updatedOrder = await updateMenuItemStatus(orderId, itemIndex, newStatus)
+      if (updatedOrder) {
+        setOrders((prev) =>
+          prev.map((order) => (order.id === orderId ? updatedOrder : order))
+        )
+      }
     } catch (err) {
-      console.error('メニュー単位のステータス更新エラー:', err)
-      setError(err instanceof Error ? err.message : 'メニュー単位のステータス更新に失敗しました')
+      console.error('メニュー項目ステータス更新エラー:', err)
+      setError(err instanceof Error ? err.message : 'メニュー項目ステータスの更新に失敗しました')
     } finally {
-      setUpdatingId((current) => (current === `menu-${menuName}` ? null : current))
+      setUpdatingId((current) => (current === updateKey ? null : current))
     }
   }
 
-  const handleStartCooking = async (orderId: string) => {
-    await handleUpdateStatus(orderId, 'preparing')
+  // 注文番号を短縮表示
+  const formatOrderId = (orderId: string): string => {
+    return orderId.substring(0, 8).toUpperCase()
+  }
+
+  // 受付番号を計算（同一テーブル内での連番）
+  const getReceptionNumber = (tableNumber: number, orderCreatedAt?: string): number => {
+    if (!orderCreatedAt) return 0
+    const tableOrders = orders.filter(
+      (order) => order.table_number === tableNumber && order.created_at
+    )
+    const sortedOrders = [...tableOrders].sort((a, b) => {
+      if (!a.created_at || !b.created_at) return 0
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    })
+    const index = sortedOrders.findIndex((order) => order.created_at === orderCreatedAt)
+    return index >= 0 ? index + 1 : 0
+  }
+
+  // ステータスに応じた背景色を取得
+  const getStatusBackgroundColor = (
+    status: 'pending' | 'preparing' | 'served',
+    updateKey: string
+  ): string => {
+    // 配膳ボタンが押された場合、一時的に赤色を表示
+    if (servingItems.has(updateKey)) {
+      return 'bg-red-100' // 薄い赤色 (#FFCDD2)
+    }
+    
+    switch (status) {
+      case 'pending':
+        return 'bg-gray-200' // 初期背景色：灰色 (#CCCCCC相当)
+      case 'preparing':
+        return 'bg-blue-100' // 薄い青色 (#BBDEFB)
+      case 'served':
+        return 'bg-yellow-100' // 薄い黄色 (#FFF9C4)
+      default:
+        return 'bg-gray-200'
+    }
+  }
+
+  // 配膳ボタンの処理（配膳後に灰色に戻す）
+  const handleServeItem = async (orderId: string, itemIndex: number) => {
+    const updateKey = `${orderId}-${itemIndex}`
+    setUpdatingId(updateKey)
+    
+    // 配膳ボタン押下後、一時的に赤色を表示
+    setServingItems((prev) => new Set(prev).add(updateKey))
+    
+    try {
+      // 少し待ってから灰色に戻す（配膳完了状態）
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      
+      // ステータスを'pending'に戻して灰色にする
+      await handleMenuItemStatusUpdate(orderId, itemIndex, 'pending')
+      
+      // 赤色表示を解除
+      setServingItems((prev) => {
+        const next = new Set(prev)
+        next.delete(updateKey)
+        return next
+      })
+    } catch (err) {
+      console.error('配膳処理エラー:', err)
+      setError(err instanceof Error ? err.message : '配膳処理に失敗しました')
+      setServingItems((prev) => {
+        const next = new Set(prev)
+        next.delete(updateKey)
+        return next
+      })
+    } finally {
+      setUpdatingId((current) => (current === updateKey ? null : current))
+    }
   }
 
   const handleCompleteCheckout = async (tableNumber: number) => {
@@ -456,252 +522,89 @@ export default function KitchenPage() {
           </div>
         )}
 
-        {/* 表示モード切り替え（テーブル表示 / メニュー表示） */}
-        {activeTab === 'table' ? (
-          /* テーブル番号ごとの表示 */
-          pendingOrders.length === 0 ? (
-            <p className="text-gray-500">現在、保留中の注文はありません。</p>
-          ) : (
-            <div className="space-y-6">
-              {Object.entries(ordersByTable)
-                .sort(([a], [b]) => Number(a) - Number(b))
-                .map(([tableNumber, items]) => {
-                  // このテーブルの注文を取得（注文IDごとにグループ化）
-                  const orderGroups: Record<string, ExpandedOrderItem[]> = {}
-                  items.forEach((item) => {
-                    if (!orderGroups[item.orderId]) {
-                      orderGroups[item.orderId] = []
-                    }
-                    orderGroups[item.orderId].push(item)
-                  })
-
-                  // 各注文グループを表示
-                  return (
-                    <div key={tableNumber} className="space-y-4">
-                      {Object.entries(orderGroups).map(([orderId, orderItems]) => {
-                        const order = orders.find((o) => o.id === orderId)
-                        const isPending = order?.status === 'pending'
-                        const isPreparing = order?.status === 'preparing'
-                        const orderTotal = order?.total || orderItems.reduce((sum, item) => sum + item.subtotal, 0)
-
-                        return (
-                          <div
-                            key={orderId}
-                            className={`overflow-x-auto rounded-lg border-2 shadow-sm ${
-                              isPending
-                                ? 'border-red-300 bg-red-50'
-                                : isPreparing
-                                  ? 'border-blue-300 bg-blue-50'
-                                  : 'border-gray-200 bg-white'
-                            }`}
-                          >
-                            <div className="bg-gray-100 px-4 py-3">
-                              <h3 className="text-xl font-bold text-gray-900">テーブル {tableNumber}</h3>
-                              <p className="text-sm text-gray-600">
-                                受付時刻: {order?.created_at ? formatCreatedAt(order.created_at) : '不明'}
-                              </p>
-                            </div>
-                            <table className="min-w-full divide-y divide-gray-200">
-                              <thead className="bg-gray-50">
-                                <tr>
-                                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                                    メニュー名
-                                  </th>
-                                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                                    数量
-                                  </th>
-                                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                                    単価
-                                  </th>
-                                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                                    小計
-                                  </th>
-                                  {isPreparing && order?.start_time && (
-                                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                                      経過時間
-                                    </th>
-                                  )}
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-200 bg-white">
-                                {orderItems.map((item, index) => (
-                                  <tr key={`${item.orderId}-${index}`}>
-                                    <td className="px-4 py-4 text-sm font-medium text-gray-900">{item.menuName}</td>
-                                    <td className="px-4 py-4 text-sm text-gray-700">{item.quantity}</td>
-                                    <td className="px-4 py-4 text-sm text-gray-700">¥{item.price.toLocaleString()}</td>
-                                    <td className="px-4 py-4 text-sm font-semibold text-gray-900">
-                                      ¥{item.subtotal.toLocaleString()}
-                                    </td>
-                                    {isPreparing && order?.start_time && (
-                                      <td className="px-4 py-4">
-                                        <ElapsedTime startTime={order.start_time} />
-                                      </td>
-                                    )}
-                                  </tr>
-                                ))}
-                                <tr className="bg-gray-50">
-                                  <td colSpan={isPreparing && order?.start_time ? 4 : 3} className="px-4 py-4 text-right text-sm font-semibold text-gray-900">
-                                    合計
-                                  </td>
-                                  <td className="px-4 py-4 text-lg font-bold text-emerald-600">
-                                    ¥{orderTotal.toLocaleString()}
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-                            <div className="bg-gray-100 px-4 py-3">
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateStatus(orderId, 'preparing')}
-                                  disabled={updatingId === orderId || order?.status === 'preparing' || order?.status === 'completed'}
-                                  className="rounded-md bg-orange-600 px-4 py-2 text-white transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  {updatingId === orderId ? '更新中...' : '調理開始'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateStatus(orderId, 'completed')}
-                                  disabled={updatingId === orderId || order?.status === 'completed'}
-                                  className="rounded-md bg-green-600 px-4 py-2 text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  {updatingId === orderId ? '更新中...' : '完了'}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )
-                })}
-            </div>
-          )
+        {/* 注文履歴一覧（メニュー項目ごとに表示） */}
+        {expandedOrderItems.length === 0 ? (
+          <p className="text-gray-500">現在、保留中の注文はありません。</p>
         ) : (
-          /* メニューごとの表示 */
-          Object.keys(ordersByMenu).length === 0 ? (
-            <p className="text-gray-500">現在、保留中の注文はありません。</p>
-          ) : (
-            <div className="space-y-6">
-              {Object.entries(ordersByMenu)
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([menuName, items]) => {
-                  // このメニューの合計数量を計算
-                  const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0)
-                  const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0)
-                  // このメニューの注文IDのリスト（重複を除去）
-                  const orderIds = [...new Set(items.map((item) => item.orderId))]
-                  // ステータスを確認（1つの注文に複数のメニューがある場合、その注文のステータスを確認）
-                  const orderStatuses = orderIds.map((orderId) => {
-                    const order = orders.find((o) => o.id === orderId)
-                    return order?.status
-                  })
-                  const hasPending = orderStatuses.includes('pending')
-                  const hasPreparing = orderStatuses.includes('preparing')
+          <div className="overflow-x-auto rounded-lg border-2 border-gray-300 bg-white shadow-sm">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    テーブル番号
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    受付番号
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    注文番号
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    メニュー名
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    数量
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    金額
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
+                    ステータス管理
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 bg-white">
+                {expandedOrderItems.map((item) => {
+                  const updateKey = `${item.orderId}-${item.itemIndex}`
+                  const isUpdating = updatingId === updateKey
+                  const receptionNumber = getReceptionNumber(item.tableNumber, item.orderCreatedAt)
+                  const orderNumber = formatOrderId(item.orderId)
+                  const backgroundColor = getStatusBackgroundColor(item.status, updateKey)
 
                   return (
-                    <div
-                      key={menuName}
-                      className={`overflow-x-auto rounded-lg border-2 shadow-sm ${
-                        hasPending
-                          ? 'border-red-300 bg-red-50'
-                          : hasPreparing
-                            ? 'border-blue-300 bg-blue-50'
-                            : 'border-gray-200 bg-white'
-                      }`}
-                    >
-                      <div className="bg-gray-100 px-4 py-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="text-xl font-bold text-gray-900">{menuName}</h3>
-                            <p className="text-sm text-gray-600">
-                              {totalQuantity}件 | 合計金額: ¥{totalAmount.toLocaleString()}
-                            </p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateStatusByMenu(menuName, 'preparing')}
-                              disabled={updatingId === `menu-${menuName}` || !hasPending || hasPreparing}
-                              className="rounded-md bg-orange-600 px-4 py-2 text-white transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {updatingId === `menu-${menuName}` ? '更新中...' : '調理開始'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateStatusByMenu(menuName, 'completed')}
-                              disabled={updatingId === `menu-${menuName}` || hasPending || !hasPreparing}
-                              className="rounded-md bg-green-600 px-4 py-2 text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {updatingId === `menu-${menuName}` ? '更新中...' : '完了'}
-                            </button>
-                          </div>
+                    <tr key={updateKey} className={backgroundColor}>
+                      <td className="px-4 py-4 text-sm font-bold text-gray-900">{item.tableNumber}</td>
+                      <td className="px-4 py-4 text-sm text-gray-700">{receptionNumber}</td>
+                      <td className="px-4 py-4 text-sm text-gray-700">{orderNumber}</td>
+                      <td className="px-4 py-4 text-sm font-medium text-gray-900">{item.menuName}</td>
+                      <td className="px-4 py-4 text-sm text-gray-700">{item.quantity}</td>
+                      <td className="px-4 py-4 text-sm font-semibold text-gray-900">
+                        ¥{item.amount.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleMenuItemStatusUpdate(item.orderId, item.itemIndex, 'preparing')}
+                            disabled={isUpdating || item.status !== 'pending'}
+                            className="rounded-md bg-blue-500 px-3 py-1 text-xs font-medium text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isUpdating ? '更新中...' : '開始'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMenuItemStatusUpdate(item.orderId, item.itemIndex, 'served')}
+                            disabled={isUpdating || item.status !== 'preparing'}
+                            className="rounded-md bg-yellow-500 px-3 py-1 text-xs font-medium text-white transition hover:bg-yellow-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isUpdating ? '更新中...' : '完了'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleServeItem(item.orderId, item.itemIndex)}
+                            disabled={isUpdating || item.status !== 'served'}
+                            className="rounded-md bg-red-500 px-3 py-1 text-xs font-medium text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isUpdating ? '更新中...' : '配膳'}
+                          </button>
                         </div>
-                      </div>
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                              テーブル番号
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                              数量
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                              単価
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                              小計
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                              受付時刻
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700">
-                              ステータス
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200 bg-white">
-                          {items.map((item, index) => {
-                            const order = orders.find((o) => o.id === item.orderId)
-                            const isPending = order?.status === 'pending'
-                            const isPreparing = order?.status === 'preparing'
-                            return (
-                              <tr key={`${item.orderId}-${index}`}>
-                                <td className="px-4 py-4 text-lg font-bold text-gray-900">{item.tableNumber}</td>
-                                <td className="px-4 py-4 text-sm text-gray-700">{item.quantity}</td>
-                                <td className="px-4 py-4 text-sm text-gray-700">¥{item.price.toLocaleString()}</td>
-                                <td className="px-4 py-4 text-sm font-semibold text-gray-900">
-                                  ¥{item.subtotal.toLocaleString()}
-                                </td>
-                                <td className="px-4 py-4 text-sm text-gray-600">
-                                  {item.createdAt ? formatCreatedAt(item.createdAt) : '不明'}
-                                </td>
-                                <td className="px-4 py-4">
-                                  {isPending ? (
-                                    <span className="inline-block rounded-full bg-red-200 px-3 py-1 text-xs font-semibold text-red-800">
-                                      保留中
-                                    </span>
-                                  ) : isPreparing ? (
-                                    <span className="inline-block rounded-full bg-blue-200 px-3 py-1 text-xs font-semibold text-blue-800">
-                                      調理中
-                                    </span>
-                                  ) : (
-                                    <span className="inline-block rounded-full bg-gray-200 px-3 py-1 text-xs font-semibold text-gray-800">
-                                      完了
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                      </td>
+                    </tr>
                   )
                 })}
-            </div>
-          )
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 

@@ -106,6 +106,7 @@ export default function CartPage() {
           productId: item.product.id,
           quantity: item.quantity,
           price: item.product.price,
+          status: 'pending' as const,
         })),
         total,
       })

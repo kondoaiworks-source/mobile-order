@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState, useEffect, useCallback } from 'react'
 import { useCart } from '@/src/contexts/CartContext'
-import { fetchOrderHistory, requestCheckout, getSupabaseBrowserClient, fetchProducts } from '@/src/lib/supabase'
+import { fetchOrderHistory, getSupabaseBrowserClient, fetchProducts } from '@/src/lib/supabase'
 import type { Order, Product } from '@/src/types'
 
 const currencyFormatter = new Intl.NumberFormat('ja-JP', {
@@ -25,11 +25,8 @@ export default function CheckoutPage() {
   const [tableNumber, setTableNumber] = useState(1)
   const [orderHistory, setOrderHistory] = useState<Order[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
-  const [showCheckoutButton, setShowCheckoutButton] = useState(false)
   const [showCheckoutMessage, setShowCheckoutMessage] = useState(false)
-  const [isRequestingCheckout, setIsRequestingCheckout] = useState(false)
   const [products, setProducts] = useState<Product[]>([])
-  const [checkoutOrderHistory, setCheckoutOrderHistory] = useState<Order[]>([])
 
   const loadOrderHistory = useCallback(async () => {
     setLoadingHistory(true)
@@ -84,6 +81,12 @@ export default function CheckoutPage() {
           
           if (!updatedOrder || !oldOrder) return
 
+          // itemsが更新された場合（メニュー項目のステータス変更）: 注文履歴を再読み込み
+          if (JSON.stringify(updatedOrder.items) !== JSON.stringify(oldOrder.items)) {
+            loadOrderHistory()
+            return
+          }
+
           // 会計リクエスト送信時（completed → checkout_requested）: 注文履歴を更新
           if (updatedOrder.status === 'checkout_requested' && oldOrder.status === 'completed') {
             loadOrderHistory() // checkout_requestedになった注文は除外される
@@ -93,7 +96,6 @@ export default function CheckoutPage() {
           // 会計完了時（checkout_requested → checkout_completed）: 画面をリセット
           if (updatedOrder.status === 'checkout_completed' && oldOrder.status === 'checkout_requested') {
             clearCart()
-            setShowCheckoutButton(false)
             setShowCheckoutMessage(false)
             loadOrderHistory() // 注文履歴を再読み込み（checkout_completedは除外される）
           }
@@ -106,41 +108,81 @@ export default function CheckoutPage() {
     }
   }, [tableNumber, clearCart, loadOrderHistory])
 
-  const handleCheckout = async () => {
-    if (orderHistory.length === 0) {
-      return
-    }
-
-    // 会計リクエスト送信前に、現在の注文履歴を保存
-    setCheckoutOrderHistory([...orderHistory])
-
-    setIsRequestingCheckout(true)
-    try {
-      await requestCheckout(tableNumber, historyTotal)
-      // 会計リクエスト送信後、注文履歴を再読み込み（checkout_requestedになった注文は除外される）
-      await loadOrderHistory()
-      setShowCheckoutButton(true)
-    } catch (err) {
-      console.error('会計リクエストエラー:', err)
-      alert('会計リクエストの送信に失敗しました。時間をおいて再度お試しください。')
-      setCheckoutOrderHistory([])
-    } finally {
-      setIsRequestingCheckout(false)
-    }
-  }
 
   const handleCheckoutConfirm = () => {
     setShowCheckoutMessage(true)
     setTimeout(() => {
       setShowCheckoutMessage(false)
       setShowCheckoutButton(false)
-    }, 10000)
+      router.push('/') // 3秒後にメニュー画面に戻る
+    }, 3000)
   }
 
   // 商品IDから商品情報を取得
   const getProductById = (productId: string): Product | undefined => {
     return products.find(p => p.id === productId)
   }
+
+  // 注文番号を短縮表示
+  const formatOrderId = (orderId: string): string => {
+    return `#${orderId.substring(0, 8).toUpperCase()}`
+  }
+
+  // ステータスを日本語で表示
+  // 計画によると：
+  // - 注文ずみ: 顧客が注文を確定した直後（pending）
+  // - 配膳待ち: 厨房側で「完了」ボタンが押されたとき（served）
+  // - 配膳完了: 厨房側で「配膳完了」ボタンが押されたとき（配膳後はpendingに戻るが、顧客側では表示しない）
+  const getStatusLabel = (status?: string): string => {
+    switch (status) {
+      case 'pending':
+        return '注文ずみ'
+      case 'preparing':
+        return '注文ずみ' // 厨房側の「開始」状態は顧客側では「注文ずみ」として表示
+      case 'served':
+        return '配膳待ち' // 厨房側の「完了」ボタンでこの状態になる
+      default:
+        return '注文ずみ'
+    }
+  }
+
+  // 注文履歴をメニュー項目ごとに展開
+  type OrderHistoryItem = {
+    orderId: string
+    orderNumber: string
+    menuName: string
+    quantity: number
+    amount: number
+    status: string
+    orderCreatedAt?: string
+  }
+
+  const orderHistoryItems: OrderHistoryItem[] = []
+  orderHistory.forEach((order) => {
+    if (Array.isArray(order.items)) {
+      order.items.forEach((item) => {
+        const product = getProductById(item.productId)
+        orderHistoryItems.push({
+          orderId: order.id,
+          orderNumber: formatOrderId(order.id),
+          menuName: product?.name || `商品ID: ${item.productId}`,
+          quantity: item.quantity,
+          amount: item.price * item.quantity,
+          status: item.status || 'pending',
+          orderCreatedAt: order.created_at,
+        })
+      })
+    }
+  })
+
+  // 新しい順でソート（created_at降順）
+  orderHistoryItems.sort((a, b) => {
+    if (!a.orderCreatedAt || !b.orderCreatedAt) return 0
+    return new Date(b.orderCreatedAt).getTime() - new Date(a.orderCreatedAt).getTime()
+  })
+
+  // 注文履歴の合計金額を計算
+  const historyTotal = orderHistoryItems.reduce((sum, item) => sum + item.amount, 0)
 
   // 会計メッセージ表示中（オーバーレイ）
   if (showCheckoutMessage) {
@@ -157,9 +199,6 @@ export default function CheckoutPage() {
       </div>
     )
   }
-
-  // 注文履歴の合計金額を計算
-  const historyTotal = orderHistory.reduce((sum, order) => sum + order.total, 0)
 
   return (
     <div className="mx-auto min-h-screen max-w-2xl px-4 py-6 pb-24">
@@ -184,122 +223,57 @@ export default function CheckoutPage() {
       <div className="space-y-4">
         {loadingHistory ? (
           <p className="text-center text-gray-500">読み込み中...</p>
-        ) : orderHistory.length === 0 ? (
+        ) : orderHistoryItems.length === 0 ? (
           <p className="text-center text-gray-500">注文履歴がありません</p>
         ) : (
           <>
-            {orderHistory.map((order) => (
-              <div
-                key={order.id}
-                className="rounded-lg border border-gray-200 bg-white p-4"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">
-                      {order.created_at && dateTimeFormatter.format(new Date(order.created_at))}
-                    </p>
-                    <p className="mt-1 text-sm font-medium text-gray-900">
-                      テーブル {order.table_number}
-                    </p>
-                    {Array.isArray(order.items) && (
-                      <p className="mt-1 text-xs text-gray-500">
-                        {order.items.length}点
-                      </p>
-                    )}
+            {/* メニュー項目ごとに1行表示 */}
+            <div className="space-y-2">
+              {orderHistoryItems.map((item, index) => (
+                <div
+                  key={`${item.orderId}-${index}`}
+                  className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4"
+                >
+                  <div className="flex-1">
+                    {/* メニュー名を明確に表示 */}
+                    <div className="mb-1">
+                      <span className="text-base font-semibold text-gray-900">{item.menuName}</span>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                      <span>注文番号: {item.orderNumber}</span>
+                      <span>数量: {item.quantity}</span>
+                      <span>金額: {currencyFormatter.format(item.amount)}</span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-emerald-600">
-                      {currencyFormatter.format(order.total)}
-                    </p>
-                    <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                      完了
+                  <div className="ml-4">
+                    <span className="inline-block rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">
+                      {getStatusLabel(item.status)}
                     </span>
                   </div>
                 </div>
-              </div>
-            ))}
-            
-            {/* 注文履歴の合計 */}
-            <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-lg font-semibold text-gray-700">合計金額</span>
-                <span className="text-2xl font-bold text-emerald-600">
-                  {currencyFormatter.format(historyTotal)}
-                </span>
-              </div>
+              ))}
             </div>
 
-            {/* 会計するボタン */}
-            {!showCheckoutButton && (
-              <button
-                type="button"
-                onClick={handleCheckout}
-                disabled={isRequestingCheckout || orderHistory.length === 0}
-                className="w-full rounded-lg bg-emerald-600 px-6 py-4 text-lg font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isRequestingCheckout ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    送信中...
+            {/* 最下部：合計金額と会計するボタン */}
+            <div className="mt-6 space-y-3">
+              <div className="rounded-lg border border-gray-200 bg-white p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-lg font-semibold text-gray-700">合計金額</span>
+                  <span className="text-2xl font-bold text-emerald-600">
+                    {currencyFormatter.format(historyTotal)}
                   </span>
-                ) : (
-                  '会計する'
-                )}
-              </button>
-            )}
-
-            {/* 会計ボタン表示時：注文履歴の詳細を表示 */}
-            {showCheckoutButton && (
-              <div className="mt-6 space-y-4">
-                {/* 注文履歴の詳細（小計は表示せず、最終合計金額のみ表示） */}
-                <div className="space-y-3">
-                  {checkoutOrderHistory.map((order) => (
-                    <div key={order.id} className="rounded-lg border border-gray-200 bg-white p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-gray-500">
-                            {order.created_at && dateTimeFormatter.format(new Date(order.created_at))}
-                          </p>
-                          <p className="mt-1 text-sm font-medium text-gray-900">
-                            テーブル {order.table_number}
-                          </p>
-                          {Array.isArray(order.items) && (
-                            <p className="mt-1 text-xs text-gray-500">
-                              {order.items.length}点
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-emerald-600">
-                            {currencyFormatter.format(order.total)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* 合計金額 */}
-                <div className="rounded-lg border border-gray-200 bg-white p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-lg font-semibold text-gray-700">合計金額</span>
-                    <span className="text-2xl font-bold text-emerald-600">
-                      {currencyFormatter.format(checkoutOrderHistory.reduce((sum, order) => sum + order.total, 0))}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCheckoutConfirm}
-                    className="w-full rounded-lg bg-emerald-600 px-6 py-4 text-lg font-semibold text-white transition hover:bg-emerald-500"
-                  >
-                    会計します
-                  </button>
                 </div>
               </div>
-            )}
+
+              <button
+                type="button"
+                onClick={handleCheckoutConfirm}
+                disabled={orderHistoryItems.length === 0}
+                className="w-full rounded-lg bg-emerald-600 px-6 py-4 text-lg font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                会計する
+              </button>
+            </div>
           </>
         )}
       </div>

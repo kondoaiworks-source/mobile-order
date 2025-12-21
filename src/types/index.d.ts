@@ -14,6 +14,7 @@ export type OrderItem = {
   productId: string
   quantity: number
   price: number
+  status?: 'pending' | 'preparing' | 'served'
 }
 
 export type Order = {

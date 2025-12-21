@@ -74,15 +74,16 @@ export async function fetchPendingOrders(): Promise<Order[]> {
 export async function fetchOrderHistory(tableNumber?: number): Promise<Order[]> {
   const client = getSupabaseBrowserClient()
 
-  // 会計タブで表示するのはcompletedステータスのみ（checkout_completedとcheckout_requestedは除外）
-  // クエリレベルで確実に除外するため、.neq()を複数回使用
+  // 会計画面で表示するのは確定した注文（pending/preparing/completed/served状態）
+  // checkout_completedとcheckout_requestedは除外
   let query = client
     .from('orders')
     .select('id, table_number, status, items, total, created_at, start_time, end_time, duration_seconds')
-    // completedステータスのみを取得
-    .eq('status', 'completed')
+    .in('status', ['pending', 'preparing', 'completed'])
+    .neq('status', 'checkout_completed')
+    .neq('status', 'checkout_requested')
     .order('created_at', { ascending: false })
-    .limit(50)
+    .limit(100)
 
   if (tableNumber) {
     query = query.eq('table_number', tableNumber)
@@ -96,25 +97,12 @@ export async function fetchOrderHistory(tableNumber?: number): Promise<Order[]> 
   }
 
   // クライアント側でcheckout_completedとcheckout_requestedを確実に除外
-  // データベースの制約やクエリが正しく動作していない場合でも、確実に除外するため
   const filteredData = (data ?? []).filter(
     (order) => {
-      // completedステータスのみを許可し、会計関連のステータスは確実に除外
-      const isValid = order.status === 'completed'
-      
-      // デバッグ用：取得されたすべての注文をログに出力
-      console.log(`📋 fetchOrderHistory: id=${order.id?.substring(0, 8)}..., status=${order.status}, table=${order.table_number}, isValid=${isValid}`)
-      
-      // checkout_completedやcheckout_requestedが含まれていた場合、警告を出力
-      if (order.status === 'checkout_completed' || order.status === 'checkout_requested') {
-        console.error(`❌ エラー: checkout_completedまたはcheckout_requestedの注文が取得されました！ id=${order.id}, status=${order.status}`)
-      }
-      
+      const isValid = order.status === 'pending' || order.status === 'preparing' || order.status === 'completed'
       return isValid
     }
   )
-
-  console.log(`✅ fetchOrderHistory: フィルタリング後 ${filteredData.length}件（取得: ${data?.length || 0}件）`)
 
   return filteredData as Order[]
 }
@@ -180,6 +168,61 @@ export async function updateOrderStatus(id: string, status: Order['status']): Pr
   }
 
   return data as Order
+}
+
+export async function updateMenuItemStatus(
+  orderId: string,
+  itemIndex: number,
+  newStatus: 'pending' | 'preparing' | 'served'
+): Promise<Order | null> {
+  try {
+    const client = getSupabaseBrowserClient()
+
+    // 現在の注文を取得
+    const { data: currentOrder, error: fetchError } = await client
+      .from('orders')
+      .select('items')
+      .eq('id', orderId)
+      .single()
+
+    if (fetchError) {
+      console.error('注文の取得に失敗しました', fetchError)
+      throw new Error(`注文の取得に失敗しました: ${fetchError.message}`)
+    }
+
+    if (!currentOrder || !Array.isArray(currentOrder.items)) {
+      throw new Error('注文データが無効です')
+    }
+
+    if (itemIndex < 0 || itemIndex >= currentOrder.items.length) {
+      throw new Error('無効なアイテムインデックスです')
+    }
+
+    // アイテムのステータスを更新
+    const updatedItems = [...currentOrder.items]
+    updatedItems[itemIndex] = {
+      ...updatedItems[itemIndex],
+      status: newStatus,
+    }
+
+    // 更新されたアイテム配列を保存
+    const { data, error } = await client
+      .from('orders')
+      .update({ items: updatedItems })
+      .eq('id', orderId)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('メニュー項目ステータスの更新に失敗しました', error)
+      throw new Error(`メニュー項目ステータスの更新に失敗しました: ${error.message}`)
+    }
+
+    return data as Order
+  } catch (err) {
+    console.error('updateMenuItemStatus エラー:', err)
+    throw err
+  }
 }
 
 export async function requestCheckout(tableNumber: number, total: number): Promise<void> {
